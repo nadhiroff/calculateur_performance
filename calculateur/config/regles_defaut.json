@@ -1,0 +1,64 @@
+{
+  "periode": "2026-10",
+  "statuts_comptes": [
+    "OK"
+  ],
+  "segment_b2b": {
+    "champ": "TYPE_CLIENT",
+    "valeur": "ORGANISATION"
+  },
+  "seuil_montant_atypique": 1000000,
+  "agent": {
+    "journee_reussie": 200,
+    "champion_du_jour": {
+      "prime": 1000,
+      "exige_objectif": true
+    },
+    "paliers_tro": [
+      {
+        "nom": "Engagé",
+        "seuil": 0.8,
+        "prime": 5000
+      },
+      {
+        "nom": "Objectif",
+        "seuil": 1.0,
+        "prime": 12500
+      },
+      {
+        "nom": "Champion",
+        "seuil": 1.2,
+        "prime": 20000
+      }
+    ],
+    "bonus_b2b": 5000
+  },
+  "superviseur": {
+    "journee_equipe": 500,
+    "paliers_tro": [
+      {
+        "nom": "Bronze",
+        "seuil": 0.9,
+        "prime": 15000
+      },
+      {
+        "nom": "Argent",
+        "seuil": 1.0,
+        "prime": 30000
+      },
+      {
+        "nom": "Or",
+        "seuil": 1.1,
+        "prime": 50000
+      }
+    ],
+    "activation": {
+      "seuil_agent": 0.8,
+      "taux_min": 0.6
+    },
+    "trophee": {
+      "enveloppe": 50000,
+      "tro_min": 1.0
+    }
+  }
+}

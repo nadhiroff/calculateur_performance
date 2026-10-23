@@ -1,0 +1,63 @@
+# Calculateur de performance — PHP natif. Dossier servi tel quel (ex. https://rgz.bj/calculateur_performance/).
+# Volontairement sans « Options » ni « DirectoryIndex » : certains hébergeurs les interdisent dans .htaccess (erreur 500).
+# Les dossiers internes sont fermés par leur propre .htaccess et par la règle de réécriture ci-dessous.
+
+# Limites PHP pour les gros fichiers quand PHP tourne en module Apache (en FPM/FastCGI, c'est .user.ini qui s'applique).
+<IfModule mod_php.c>
+    php_value post_max_size 64M
+    php_value upload_max_filesize 32M
+    php_value memory_limit 1024M
+    php_value max_execution_time 600
+    php_value max_input_time -1
+</IfModule>
+<IfModule mod_php7.c>
+    php_value post_max_size 64M
+    php_value upload_max_filesize 32M
+    php_value memory_limit 1024M
+    php_value max_execution_time 600
+    php_value max_input_time -1
+</IfModule>
+
+# Fichiers sensibles jamais servis (configuration, dépendances, notes)
+<FilesMatch "^(composer\.(json|lock)|\.user\.ini|.*\.md|.*\.sql|.*\.log)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Dossiers internes inaccessibles depuis le web (chacun a aussi son propre .htaccess « Require all denied »)
+    RewriteRule ^(config|src|vendor|database|storage)(/|$) - [F,L]
+
+    # Anciennes adresses courtes (chemin repris de l'URL : fonctionne quel que soit le nom du dossier sur le serveur)
+    RewriteCond %{REQUEST_URI} ^(.*/)calculateur/?$
+    RewriteRule ^calculateur/?$ %1calculateur/index.php [R=302,L]
+    RewriteCond %{REQUEST_URI} ^(.*/)parametres/?$
+    RewriteRule ^parametres/?$ %1calculateur/parametres.php [R=302,L]
+
+    # Anciennes pages .html (favoris) : remplacées par les pages .php protégées par la connexion
+    RewriteCond %{REQUEST_URI} ^(.*/)calculateur/(index|parametres)\.html$
+    RewriteRule ^calculateur/(index|parametres)\.html$ %1calculateur/%2.php [R=301,L]
+</IfModule>
+
+# Compression des réponses (pages, API JSON, CSS, JS) : 3 à 5 fois moins de données à télécharger sur mobile
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css text/plain application/json application/javascript text/javascript image/svg+xml
+</IfModule>
+
+# Cache navigateur : CSS / JS appelés avec ?v=… (nouvelle adresse à chaque mise à jour) gardés 30 jours, images 7 jours.
+# Les pages PHP et l'API envoient leurs propres en-têtes « no-store » / « no-cache » : jamais mises en cache.
+<IfModule mod_headers.c>
+    <FilesMatch "\.(css|js)$">
+        Header set Cache-Control "public, max-age=2592000"
+    </FilesMatch>
+    <FilesMatch "\.(png|jpe?g|gif|svg|ico|webp)$">
+        Header set Cache-Control "public, max-age=604800"
+    </FilesMatch>
+</IfModule>

@@ -1,0 +1,23 @@
+/* ==========================================================================
+   IMPRESSION / PDF — masque la navigation et les contrôles, force le thème clair
+   ========================================================================== */
+@media print {
+  @page { size: A4 landscape; margin: 10mm; }
+  :root { color-scheme: light; --bg: #fff; --surface: #fff; --surface-2: #f1f5f9; --border: #cbd5e1; --text: #0f172a; --text-2: #334155; --text-3: #475569; }
+  body { background: #fff; font-size: 11px; }
+  .app-header, .sidebar, #toasts, .skip-link, .no-print, .pager, .table-tools, .filters-card, dialog, #mobile-menu-btn, #mobile-overlay { display: none !important; }
+  .main-col { margin-left: 0 !important; }
+  .view { display: none !important; } .view.active { display: block !important; animation: none; }
+  .card, .kpi { box-shadow: none; break-inside: avoid; }
+  .table-wrap { max-height: none !important; overflow: visible; border: 0; }
+  table.data thead th, table.data tfoot td { position: static; }
+  table.data th, table.data td { padding: 4px 6px; font-size: 10px; }
+  .grid-2, .grid-3, .grid-3-1 { grid-template-columns: 1fr 1fr; }
+  a { color: inherit; text-decoration: none; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+/* Capture PDF (html2canvas) : thème clair forcé le temps de la capture */
+html.capture-light { color-scheme: light; --bg: #fff; --surface: #fff; --surface-2: #f1f5f9; --border: #e2e8f0; --text: #0f172a; --text-2: #475569; --text-3: #64748b; --primary-soft: #e8eef9; --pos-text: #047857; --pos-soft: #d1fae5; --warn-text: #b45309; --warn-soft: #fef3c7; --neg-text: #b91c1c; --neg-soft: #fee2e2; --info-text: #1d4ed8; --info-soft: #dbeafe; }
+html.capture-light .table-wrap { max-height: none !important; overflow: visible; }
+html.capture-light .overview-hero { background: #0B1B3A; }
+html.capture-light .pager, html.capture-light .table-tools, html.capture-light .filters-card, html.capture-light .no-print { display: none !important; }
