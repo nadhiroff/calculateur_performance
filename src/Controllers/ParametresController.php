@@ -18,7 +18,7 @@ final class ParametresController
     {
         $etat = (new ParametresSync())->exporter();
         // Historique mensuel par partenaire : mois présents en base calculés à partir des ventes réelles (HistoriqueVentes)
-        if ($etat !== null && is_object($etat['partenaires']) && isset($etat['partenaires']->historique)) {
+        if ($etat !== null && is_object($etat['partenaires'])) {   // même sans historique enregistré : les mois en base sont calculés
             $etat['partenaires']->historique = HistoriqueVentes::completer($etat['partenaires']);
         }
 

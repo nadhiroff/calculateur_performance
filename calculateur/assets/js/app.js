@@ -346,6 +346,7 @@
           + (f.length > 1 ? ' · ' + fi + ' feuille(s) de données importée(s) sur ' + f.length + ' (' + (f.length - fi) + ' synthèse(s) ignorée(s))' : '') + '.', 'ok', 9000);
       }
       const st = r.stats || {};
+      await CT.store.rafraichirHistorique().catch(() => false);   // historique mensuel des partenaires : mois importé recalculé
       await chargerDonnees(st.au ? { du: st.du && st.du < debutMoisDe(st.au) ? st.du : debutMoisDe(st.au), au: st.au } : null);
       CT.dashboard.synthese();
       return r;

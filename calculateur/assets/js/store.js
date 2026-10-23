@@ -187,6 +187,16 @@
       versionServeur = r.version;
       if (!r.vide) { etat = r.etat; notifier('serveur'); }
     },
+    /* Historique mensuel recalculé par le serveur à partir des ventes en base (après un import, au retour sur la page) :
+       remplacé seul, sans recalcul ni notification ; ignoré si une modification locale attend d'être envoyée. true si changé */
+    async rafraichirHistorique() {
+      const r = await CT.api.parametres.lire();
+      const h = r && !r.vide && r.etat && r.etat.partenaires && r.etat.partenaires.historique;
+      if (!h || !etat || !etat.partenaires || minuteur) return false;
+      const avant = JSON.stringify(etat.partenaires.historique || null);
+      etat.partenaires.historique = h;
+      return avant !== JSON.stringify(h);
+    },
     reinitialiser() { etat = defauts(); S.sauver('reset'); },
     exporterJSON() { return JSON.stringify(S.get(), null, 2); },
     /* Validation légère puis remplacement complet */

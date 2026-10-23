@@ -36,6 +36,108 @@
   const bouton = (icone, label, fn, cls = 'btn-ghost btn-sm') => h('button', { class: 'btn ' + cls, type: 'button', title: label, 'aria-label': label, onclick: fn }, h('i', { class: 'fa-solid ' + icone, 'aria-hidden': 'true' }));
   const entete = (cols) => h('thead', {}, h('tr', {}, cols.map((c) => h('th', { scope: 'col', class: (c.num ? 'num' : '') + (c.auto ? ' col-auto' : ''), title: c.auto ? 'Calculé automatiquement à partir des ventes en base' : null }, c.t))));
 
+  /* ---------- Fenêtres d'ajout : nouvelle équipe (nom, puis « ajouter des logins ? ») et objectifs d'un login ---------- */
+  const NOUVELLE = '__nouvelle__';
+  const valider = (e) => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') { e.preventDefault(); const b = e.target.closest('dialog').querySelector('.modal-foot .btn-primary'); if (b && !b.disabled) b.click(); } };
+
+  /* Demande le nom et crée l'équipe ; renvoie son nom (null si annulé). proposerLogins : enchaîne sur l'ajout de logins */
+  async function ajouterEquipe(proposerLogins = true) {
+    let nom = '';
+    for (;;) {
+      const inp = h('input', { class: 'input', id: 'ae-nom', type: 'text', maxlength: '60', value: nom, placeholder: 'ex. ALPHA', autocomplete: 'off' });
+      const corps = h('div', { class: 'field', onkeydown: valider }, h('label', { for: 'ae-nom' }, 'Nom de l\'équipe'), inp);
+      setTimeout(() => inp.focus(), 50);
+      const ok = await CT.modal({ titre: 'Nouvelle équipe', corps, actions: [{ label: 'Annuler', valeur: false }, { label: 'Créer l\'équipe', valeur: true, variante: 'primary' }] });
+      if (!ok) return null;
+      nom = inp.value.trim();
+      const o = P().objectifs;
+      if (!nom) { CT.toast('Saisissez le nom de l\'équipe.', 'warn', 3000); continue; }
+      if (o.equipes.some((x) => x.id.toLowerCase() === nom.toLowerCase())) { CT.toast('Nom d\'équipe déjà utilisé.', 'warn', 3000); continue; }
+      o.equipes.push({ id: nom, superviseur: null, segment: null, part_rgz: 0.2, logins: [] });
+      enregistrer(); rendreTableObj();
+      CT.toast('Équipe « ' + nom + ' » créée.', 'ok', 3000);
+      break;
+    }
+    if (proposerLogins && await CT.modal({ titre: 'Ajouter des logins ?', corps: '<p>L\'équipe « <b>' + CT.esc(nom) + '</b> » est créée. Voulez-vous ajouter des logins à cette équipe maintenant ?</p>',
+      actions: [{ label: 'Plus tard', valeur: false }, { label: 'Oui, ajouter des logins', valeur: true, variante: 'primary' }] })) await ajouterObjectifs(nom);
+    return nom;
+  }
+
+  /* Objectifs d'un login : équipe, login, B2C / B2B (mois = somme), jour, semaine, primes. « Ajouter et continuer » garde l'équipe */
+  async function ajouterObjectifs(equipeInit) {
+    const vide = (eq) => ({ equipe: eq, login: '', b2c: '', b2b: '', jour: '', semaine: '', primes: true });
+    let v = vide(equipeInit || (P().objectifs.equipes[0] || {}).id || NOUVELLE);
+    for (;;) {
+      const o = P().objectifs, mc = CT.objectifs.modeCalcul(o);
+      const champ = (id, label, el, cls) => h('div', { class: 'field' + (cls ? ' ' + cls : '') }, h('label', { for: id }, label), el);
+      const num = (id, val) => h('input', { class: 'input', id, type: 'number', min: '0', step: '1', inputmode: 'numeric', value: val, placeholder: '0' });
+      const optEq = (id) => h('option', { value: id, selected: id === v.equipe }, id);
+      const sel = h('select', { class: 'select', id: 'ao-eq' }, o.equipes.map((e) => optEq(e.id)), h('option', { value: NOUVELLE, selected: v.equipe === NOUVELLE }, '+ Nouvelle équipe…'));
+      const login = h('input', { class: 'input', id: 'ao-login', type: 'text', value: v.login, placeholder: 'ex. pvt_rgz_nom.ftth', autocomplete: 'off', spellcheck: 'false' });
+      const b2c = num('ao-b2c', v.b2c), b2b = num('ao-b2b', v.b2b);
+      const mois = h('input', { class: 'input', id: 'ao-mois', type: 'text', readonly: true, tabindex: '-1' });
+      const jour = num('ao-jour', mc ? '' : v.jour), sem = num('ao-sem', mc ? '' : v.semaine);
+      if (mc) { jour.disabled = true; sem.disabled = true; }
+      const primes = h('input', { type: 'checkbox', id: 'ao-primes', checked: v.primes });
+      const maj = () => {
+        const l = { b2c: Math.round(nombre(b2c.value)), b2b: Math.round(nombre(b2b.value)) }, aj = CT.objectifs.jourLogin(l, o), as = CT.objectifs.semLogin(l, o);
+        mois.value = CT.fmt.int(l.b2c + l.b2b);
+        const arr = (x) => CT.fmt.nat(Math.round(x * 10) / 10);
+        if (mc) { jour.value = Math.round(aj * 10) / 10; sem.value = Math.round(as * 10) / 10; } else { jour.placeholder = 'auto : ' + arr(aj); sem.placeholder = 'auto : ' + arr(as); }
+      };
+      [b2c, b2b].forEach((x) => x.addEventListener('input', maj)); maj();
+      // « + Nouvelle équipe… » : petite fenêtre du nom par-dessus, puis retour ici avec l'équipe choisie
+      let precedente = v.equipe !== NOUVELLE ? v.equipe : null;
+      sel.addEventListener('change', async () => {
+        if (sel.value !== NOUVELLE) { precedente = sel.value; return; }
+        const nom = await ajouterEquipe(false);
+        if (nom) { sel.insertBefore(h('option', { value: nom }, nom), sel.lastChild); sel.value = nom; precedente = nom; } else sel.value = precedente || NOUVELLE;
+      });
+      const corps = h('div', { class: 'stack', onkeydown: valider },
+        champ('ao-eq', 'Équipe', sel), champ('ao-login', 'Login de l\'agent', login),
+        h('div', { class: 'form-grid' }, champ('ao-b2c', 'Objectif B2C (mois)', b2c), champ('ao-b2b', 'Objectif B2B (mois)', b2b), champ('ao-mois', 'Objectif du mois', mois)),
+        h('div', { class: 'form-grid' }, champ('ao-jour', 'Objectif du jour', jour), champ('ao-sem', 'Objectif de la semaine', sem)),
+        h('span', { class: 'hint' }, mc ? 'Jour et semaine calculés à partir de l\'objectif du mois (mode choisi plus haut).' : 'Jour et semaine : laissez vide pour le calcul automatique à partir de l\'objectif du mois.'),
+        h('label', { class: 'check' }, primes, 'Éligible aux primes'));
+      setTimeout(() => (sel.value === NOUVELLE || !o.equipes.length ? sel : login).focus(), 50);
+      const choix = await CT.modal({ titre: 'Ajouter des objectifs — ' + CT.date.libelleMois(cle), corps, actions: [
+        { label: 'Annuler', valeur: false }, { label: 'Ajouter et continuer', valeur: 'suite' }, { label: 'Ajouter', valeur: 'ok', variante: 'primary' }] });
+      if (!choix) return;
+      v = { equipe: sel.value, login: login.value.trim(), b2c: b2c.value, b2b: b2b.value, jour: mc ? '' : jour.value, semaine: mc ? '' : sem.value, primes: primes.checked };
+
+      const eq = o.equipes.find((e) => e.id === v.equipe);
+      const doublon = v.login && o.equipes.flatMap((e) => e.logins.map((l) => ({ e, l }))).find((x) => CT.cleLogin(x.l.login) === CT.cleLogin(v.login));
+      if (!eq) { CT.toast('Choisissez une équipe (ou créez-en une).', 'warn', 4000); continue; }
+      if (!v.login) { CT.toast('Saisissez le login de l\'agent.', 'warn', 4000); continue; }
+      if (doublon) { CT.toast('Le login « ' + doublon.l.login + ' » existe déjà dans l\'équipe ' + doublon.e.id + '.', 'warn', 5000); continue; }
+      const n = (x) => Math.max(0, Math.round(nombre(x)));
+      eq.logins.push({ login: v.login, b2c: n(v.b2c), b2b: n(v.b2b), jour: n(v.jour), semaine: n(v.semaine), primes: v.primes });
+      delete eq.fichier;   // les totaux de l'équipe repartent de ses logins (comme une modification dans le tableau)
+      enregistrer(); rendreTableObj();
+      CT.toast('Login « ' + v.login + ' » ajouté à ' + eq.id + '.', 'ok', 3000);
+      if (choix !== 'suite') return;
+      v = vide(eq.id);
+    }
+  }
+
+  /* Petite fenêtre de saisie générique (paliers, partenaires…) : enregistrerFn(valeurs) renvoie un message d'erreur pour rester ouverte */
+  async function fenetreAjout(titre, champs, enregistrerFn) {
+    let vals = champs.map((c) => (c.val == null ? '' : c.val));
+    for (;;) {
+      const inputs = champs.map((c, i) => h('input', { class: 'input', id: 'fa-' + i, type: c.num ? 'number' : 'text', step: 'any', min: c.num ? '0' : null, inputmode: c.num ? 'decimal' : null, value: vals[i], placeholder: c.ph || '', autocomplete: 'off', spellcheck: 'false' }));
+      const corps = h('div', { class: 'form-grid', onkeydown: valider }, champs.map((c, i) => h('div', { class: 'field' }, h('label', { for: 'fa-' + i }, c.t), inputs[i], c.aide ? h('span', { class: 'hint' }, c.aide) : null)));
+      setTimeout(() => inputs[0] && inputs[0].focus(), 50);
+      const ok = await CT.modal({ titre, corps, actions: [{ label: 'Annuler', valeur: false }, { label: 'Ajouter', valeur: true, variante: 'primary' }] });
+      if (!ok) return false;
+      vals = inputs.map((x) => x.value.trim());
+      const manquant = champs.findIndex((c, i) => !c.num && !vals[i]);
+      if (manquant >= 0) { CT.toast('Renseignez « ' + champs[manquant].t + ' ».', 'warn', 4000); continue; }
+      const err = enregistrerFn(vals.map((x, i) => (champs[i].num ? Math.max(0, nombre(x)) : x)));
+      if (err) { CT.toast(err, 'warn', 5000); continue; }
+      return true;
+    }
+  }
+
   /* ============================== OBJECTIFS ============================== */
   function rendreObjectifs() {
     const o = P().objectifs, root = $('#p-obj');
@@ -65,7 +167,8 @@
     const rech = h('input', { class: 'input', type: 'search', placeholder: 'Rechercher un login ou une équipe…', 'aria-label': 'Rechercher', value: filtre, style: 'max-width:300px' });
     rech.addEventListener('input', CT.debounce(() => { filtre = rech.value; rendreTableObj(); }, 150));
     const outils = h('div', { class: 'table-tools' }, rech,
-      h('button', { class: 'btn btn-secondary btn-sm', type: 'button', onclick: () => { P().objectifs.equipes.push({ id: 'NOUVELLE ÉQUIPE ' + (P().objectifs.equipes.length + 1), superviseur: null, segment: null, part_rgz: 0.2, logins: [] }); enregistrer(); rendreObjectifs(); } }, h('i', { class: 'fa-solid fa-people-group', 'aria-hidden': 'true' }), 'Nouvelle équipe'),
+      h('button', { class: 'btn btn-primary btn-sm', type: 'button', onclick: () => ajouterObjectifs() }, h('i', { class: 'fa-solid fa-bullseye', 'aria-hidden': 'true' }), 'Ajouter des objectifs'),
+      h('button', { class: 'btn btn-secondary btn-sm', type: 'button', onclick: () => ajouterEquipe() }, h('i', { class: 'fa-solid fa-people-group', 'aria-hidden': 'true' }), 'Nouvelle équipe'),
       h('button', { class: 'btn btn-secondary btn-sm', type: 'button', onclick: () => $('#file-xlsx').click() }, h('i', { class: 'fa-solid fa-file-import', 'aria-hidden': 'true' }), 'Importer Excel'),
       h('button', { class: 'btn btn-secondary btn-sm', type: 'button', onclick: exporterObjectifs }, h('i', { class: 'fa-solid fa-file-export', 'aria-hidden': 'true' }), 'Exporter Excel'));
     const carte = h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('div', {}, h('h3', {}, 'Objectifs — ' + CT.date.libelleMois(cle)), h('p', {}, 'Double-clic sur une cellule pour la modifier. Équipe → logins × B2C / B2B ; jour et semaine : valeurs du fichier (modifiables) ou calculées selon le mode choisi plus haut.'))), outils, h('div', { id: 'obj-table' }));
@@ -88,8 +191,7 @@
         cellule({ val: eq.superviseur || '', fmt: (v) => v || '— superviseur', label: 'Superviseur', onCommit: (v) => { eq.superviseur = v; enregistrer(); rendreTableObj(); } }),
         h('td', { class: 'num' }, CT.fmt.int(sb2c)), h('td', { class: 'num' }, CT.fmt.int(sb2b)), h('td', { class: 'num' }, CT.fmt.int(sm)), mc ? h('td', { class: 'num' }, CT.fmt.int(CT.objectifs.jourEq(eq, o))) : cellule({ val: CT.objectifs.jourEq(eq, o), num: true, fmt: CT.fmt.int, label: 'Objectif jour de ' + eq.id, onCommit: (v) => { eq.jour = Math.round(v); enregistrer(); rendreTableObj(); } }), mc ? h('td', { class: 'num' }, CT.fmt.int(CT.objectifs.semEq(eq, o))) : cellule({ val: CT.objectifs.semEq(eq, o), num: true, fmt: CT.fmt.int, label: 'Objectif semaine de ' + eq.id, onCommit: (v) => { eq.semaine = Math.round(v); enregistrer(); rendreTableObj(); } }),
         cellule({ val: Math.round((eq.part_rgz || 0) * 100), num: true, fmt: (v) => v + ' % RGZ', label: 'Part RGZ de la commission (%)', onCommit: (v) => { eq.part_rgz = Math.min(100, v) / 100; enregistrer(); rendreTableObj(); } }),
-        h('td', {}, bouton('fa-user-plus', 'Ajouter un login à ' + eq.id, () => { eq.logins.push({ login: 'pvt_rgz_nouveau.ftth', b2c: 0, b2b: 0, jour: 0, semaine: 0, primes: false }); enregistrer(); rendreTableObj(); }),
-          bouton('fa-trash', 'Supprimer l\'équipe ' + eq.id, async () => { if (await CT.confirmer('Supprimer l\'équipe', 'Supprimer « ' + eq.id + ' » et ses ' + eq.logins.length + ' login(s) ?', 'Supprimer', true)) { o.equipes.splice(ei, 1); enregistrer(); rendreTableObj(); } }))));
+        h('td', {}, bouton('fa-trash', 'Supprimer l\'équipe ' + eq.id, async () => { if (await CT.confirmer('Supprimer l\'équipe', 'Supprimer « ' + eq.id + ' » et ses ' + eq.logins.length + ' login(s) ?', 'Supprimer', true)) { o.equipes.splice(ei, 1); enregistrer(); rendreTableObj(); } }))));
       logins.forEach(({ l, li }) => {
         const m = (+l.b2c || 0) + (+l.b2b || 0);
         const chk = h('input', { type: 'checkbox', checked: l.primes !== false && m > 0, 'aria-label': 'Éligible aux primes : ' + l.login, onchange: (e) => { l.primes = e.target.checked; enregistrer(); } });
@@ -156,7 +258,12 @@
         cellule({ val: p.prime, num: true, fmt: CT.fmt.fcfa, label: 'Prime', onCommit: (v) => { p.prime = v; enregistrer(); rendreRegles(); } }),
         h('td', {}, bouton('fa-xmark', 'Supprimer le palier ' + p.nom, () => { liste.splice(i, 1); enregistrer(); rendreRegles(); })))));
       return h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('div', {}, h('h3', {}, titre), h('p', {}, 'Un palier s\'applique dès que le TRO atteint son seuil.')),
-        h('button', { class: 'btn btn-secondary btn-sm', type: 'button', onclick: () => { liste.push({ nom: 'Nouveau palier', seuil: 1, prime: 0 }); liste.sort((a, b) => a.seuil - b.seuil); enregistrer(); rendreRegles(); } }, h('i', { class: 'fa-solid fa-plus', 'aria-hidden': 'true' }), 'Ajouter')),
+        h('button', { class: 'btn btn-secondary btn-sm', type: 'button', onclick: () => fenetreAjout('Nouveau palier — ' + titre, [{ t: 'Nom du palier', ph: 'ex. Or' }, { t: 'Seuil de TRO (%)', num: true, ph: 'ex. 100' }, { t: 'Prime (FCFA)', num: true, ph: 'ex. 25000' }], ([nom, seuil, prime]) => {
+          if (!(seuil > 0)) return 'Le seuil de TRO doit être supérieur à 0 %.';
+          if (liste.some((x) => Math.round(x.seuil * 100) === Math.round(seuil))) return 'Un palier existe déjà à ' + Math.round(seuil) + ' %.';
+          liste.push({ nom, seuil: seuil / 100, prime }); liste.sort((a, b) => a.seuil - b.seuil); enregistrer(); rendreRegles();
+          CT.toast('Palier « ' + nom + ' » ajouté.', 'ok', 3000);
+        }) }, h('i', { class: 'fa-solid fa-plus', 'aria-hidden': 'true' }), 'Ajouter')),
         h('div', { class: 'table-wrap' }, h('table', { class: 'data' }, entete([{ t: 'Palier' }, { t: 'Seuil TRO', num: 1 }, { t: 'Prime (FCFA)', num: 1 }, { t: '' }]), tb)));
     };
     const outils = h('div', { class: 'table-tools' },
@@ -205,7 +312,15 @@
       // Colonne « auto » : valeur calculée par le serveur (ex. historique des mois présents en base), affichée mais non modifiable
       const lecture = (c, x) => h('td', { class: 'num cell-auto', title: 'Calculé automatiquement à partir des ventes en base (non modifiable)' }, String(c.get(x)));
       const tb = h('tbody'); liste.forEach((x, i) => tb.append(h('tr', {}, cols.map((c) => c.auto ? lecture(c, x) : cellule({ val: c.get(x), label: c.t, onCommit: (v) => { if (c.valide && !c.valide(v)) { CT.toast('Valeur invalide pour « ' + c.t + ' ».', 'warn'); return; } c.set(x, v); enregistrer(); rendrePartenaires(); } })), h('td', {}, bouton('fa-xmark', 'Supprimer la ligne', () => { supprimer(i); enregistrer(); rendrePartenaires(); })))));
-      return h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('div', {}, h('h3', {}, titre), h('p', {}, aide)), h('button', { class: 'btn btn-secondary btn-sm', type: 'button', onclick: () => { ajouter(); enregistrer(); rendrePartenaires(); } }, h('i', { class: 'fa-solid fa-plus', 'aria-hidden': 'true' }), 'Ajouter')),
+      return h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('div', {}, h('h3', {}, titre), h('p', {}, aide)), h('button', { class: 'btn btn-secondary btn-sm', type: 'button', onclick: () => {
+        const modif = cols.filter((c) => !c.auto);
+        fenetreAjout('Ajouter — ' + titre, modif.map((c) => ({ t: c.t, num: c.num, ph: c.ph })), (vals) => {
+          const bad = modif.findIndex((c, i) => c.valide && !c.valide(String(vals[i])));
+          if (bad >= 0) return 'Valeur invalide pour « ' + modif[bad].t + ' ».';
+          const err = ajouter(vals); if (err) return err;
+          enregistrer(); rendrePartenaires(); CT.toast('Ligne ajoutée.', 'ok', 3000);
+        });
+      } }, h('i', { class: 'fa-solid fa-plus', 'aria-hidden': 'true' }), 'Ajouter')),
         h('div', { class: 'table-wrap' }, h('table', { class: 'data' }, entete(cols.map((c) => ({ t: c.t, auto: c.auto })).concat([{ t: '' }])), tb)));
     };
     const alias = Object.entries(C.alias_login).map(([k, v]) => ({ k, v }));
@@ -224,15 +339,18 @@
         h('div', { class: 'form-grid' }, h('div', { class: 'field' }, h('label', { for: 'pp' }, 'Partenaire prioritaire'), h('input', { class: 'input', id: 'pp', value: C.prioritaire, onchange: (e) => { C.prioritaire = e.target.value.trim().toUpperCase() || 'RGZ'; enregistrer(); } })),
           h('div', { class: 'field' }, h('label', { for: 'pd' }, 'Partenaire par défaut (logins non reconnus)'), h('input', { class: 'input', id: 'pd', value: C.defaut, onchange: (e) => { C.defaut = e.target.value.trim().toUpperCase() || 'AUTRES'; enregistrer(); } })))),
       tableSimple('Logins → partenaire', 'Le partenaire est lu dans le login (pvt_<jeton>_nom). Associez chaque jeton au nom du partenaire. Jeton non listé : le jeton en majuscules.', alias,
-        [{ t: 'Jeton du login', get: (x) => x.k, set: (x, v) => { x.k = v; sync(); } }, { t: 'Partenaire', get: (x) => x.v, set: (x, v) => { x.v = v; sync(); } }],
-        () => { alias.push({ k: 'jeton', v: 'PARTENAIRE' }); sync(); }, (i) => { alias.splice(i, 1); sync(); }),
+        [{ t: 'Jeton du login', ph: 'ex. rgz', get: (x) => x.k, set: (x, v) => { x.k = v; sync(); } }, { t: 'Partenaire', ph: 'ex. RGZ', get: (x) => x.v, set: (x, v) => { x.v = v; sync(); } }],
+        ([k, v]) => { const d = alias.find((a) => a.k.toLowerCase() === k.toLowerCase()); if (d) return 'Le jeton « ' + k + ' » est déjà associé à ' + d.v + '.'; alias.push({ k, v }); sync(); }, (i) => { alias.splice(i, 1); sync(); }),
       tableSimple('Agences → partenaire', 'Pour les logins sans nom de partenaire : le motif (expression régulière, insensible à la casse) est testé sur l\'AGENCE, dans l\'ordre.', C.regles_agence,
-        [{ t: 'Motif (regex)', get: (x) => x.motif, set: (x, v) => { x.motif = v; }, valide: (v) => { try { new RegExp(v); return true; } catch (e) { return false; } } }, { t: 'Partenaire', get: (x) => x.partenaire, set: (x, v) => { x.partenaire = v.toUpperCase(); } }],
-        () => C.regles_agence.push({ motif: 'mot-clé', partenaire: 'PARTENAIRE' }), (i) => C.regles_agence.splice(i, 1)),
+        [{ t: 'Motif (regex)', ph: 'ex. cotonou|akpakpa', get: (x) => x.motif, set: (x, v) => { x.motif = v; }, valide: (v) => { try { new RegExp(v); return true; } catch (e) { return false; } } }, { t: 'Partenaire', ph: 'ex. RGZ', get: (x) => x.partenaire, set: (x, v) => { x.partenaire = v.toUpperCase(); } }],
+        ([motif, p]) => { C.regles_agence.push({ motif, partenaire: p.toUpperCase() }); }, (i) => C.regles_agence.splice(i, 1)),
       tableSimple('Historique mensuel ' + histo.annee + ' (ventes par partenaire)', 'Alimente la colonne « mois précédent », l\'évolution et les graphiques de Performance partenaire. '
         + ((histo.auto || []).some(Boolean) ? 'Colonnes grisées (⟳) : calculées automatiquement à partir des ventes en base, mises à jour à chaque import. Les autres mois (sans données en base) se saisissent à la main.' : 'Les mois se rempliront automatiquement dès que leurs ventes seront importées.'), hl,
-        [{ t: 'Partenaire', get: (x) => x.n, set: (x, v) => { x.n = v; histoSync(); } }].concat(histo.mois.map((m, i) => ({ t: (histo.auto || [])[i] ? m + ' ⟳' : m, auto: !!(histo.auto || [])[i], get: (x) => x.v[i] == null ? 0 : x.v[i], set: (x, v) => { x.v[i] = nombre(v); histoSync(); }, valide: (v) => isFinite(parseFloat(v)) }))),
-        () => { hl.push({ n: 'NOUVEAU', v: histo.mois.map(() => 0) }); histoSync(); }, (i) => { hl.splice(i, 1); histoSync(); })));
+        [{ t: 'Partenaire', ph: 'ex. RGZ', get: (x) => x.n, set: (x, v) => { x.n = v; histoSync(); } }].concat(histo.mois.map((m, i) => ({ t: (histo.auto || [])[i] ? m + ' ⟳' : m, auto: !!(histo.auto || [])[i], num: true, ph: '0', get: (x) => x.v[i] == null ? 0 : x.v[i], set: (x, v) => { x.v[i] = nombre(v); histoSync(); }, valide: (v) => isFinite(parseFloat(v)) }))),
+        ([nom, ...ventes]) => {   // ventes : mois saisis à la main seulement (les mois ⟳ sont calculés par le serveur)
+          const n = nom.toUpperCase(); if (hl.some((x) => x.n.toUpperCase() === n)) return 'Le partenaire « ' + n + ' » est déjà dans l\'historique.';
+          let j = 0; hl.push({ n, v: histo.mois.map((m, i) => ((histo.auto || [])[i] ? 0 : ventes[j++])) }); histoSync();
+        }, (i) => { hl.splice(i, 1); histoSync(); })));
   }
 
   /* ============================== SAUVEGARDE ============================== */
@@ -265,7 +383,14 @@
     ['obj', 'regles', 'part', 'save'].forEach((x) => { $('#p-' + x).hidden = x !== o; });
     $('#periode-bar').hidden = !(o === 'obj' || o === 'regles');
     rendreTout();
+    if (o === 'part') actualiserHistorique();
   }
+  /* Historique mensuel : relu sur le serveur (ventes en base) à l'ouverture de l'onglet et au retour sur la page — un import
+     fait entre-temps dans le tableau de bord apparaît sans recharger */
+  async function actualiserHistorique() {
+    try { if (await CT.store.rafraichirHistorique() && onglet === 'part') rendrePartenaires(); } catch (e) { /* hors ligne : on garde l'affichage */ }
+  }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && onglet === 'part') actualiserHistorique(); });
 
   function mettreAJourUrl() {
     const newUrl = new URL(window.location);

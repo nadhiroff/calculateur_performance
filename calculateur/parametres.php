@@ -34,6 +34,12 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
     .status { font-size: var(--fs-12); color: var(--text-3); }
     .form-grid { display: grid; gap: var(--sp-4); grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
     .hint { font-size: var(--fs-12); color: var(--text-3); }
+    /* Fenêtre « Ajouter des objectifs » : champs plus étroits (3 par ligne sur ordinateur, 1 sur téléphone) */
+    dialog.modal .form-grid { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: var(--sp-3); }
+    dialog.modal .stack { gap: var(--sp-4); padding-bottom: var(--sp-2); }
+    dialog.modal .form-grid > * { min-width: 0; } dialog.modal .field .input, dialog.modal .field .select { width: 100%; min-width: 0; box-sizing: border-box; }
+    #ao-mois { background: var(--surface-2); font-weight: 700; }
+    @media (max-width: 480px) { dialog.modal .modal-foot .btn { flex: 1 1 100%; } }
     @media (max-width: 480px) {
       .cal-grid { grid-template-columns: repeat(7, minmax(36px, 1fr)); gap: 4px; max-width: 100%; }
       .cal-day { min-height: 36px; font-size: 13px; }
@@ -102,9 +108,9 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
   <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js" defer crossorigin="anonymous"></script>
   <script src="assets/js/utils.js?v=20261022-3" defer></script>
   <script src="assets/js/api.js?v=20261022-2" defer></script>
-  <script src="assets/js/store.js?v=20261021-15" defer></script>
+  <script src="assets/js/store.js?v=20261023-h1" defer></script>
   <script src="assets/js/regles.js?v=20261021-15" defer></script>
   <script src="assets/js/objectifs.js?v=20261021-15" defer></script>
-  <script src="assets/js/parametres.js?v=20261022-h1" defer></script>
+  <script src="assets/js/parametres.js?v=20261023-h1" defer></script>
 </body>
 </html>

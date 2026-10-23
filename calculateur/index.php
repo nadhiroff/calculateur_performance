@@ -135,7 +135,7 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
   <script src="assets/js/utils.js?v=20261022-3" defer></script>
   <script src="assets/js/table.js?v=20261021-15" defer></script>
   <script src="assets/js/api.js?v=20261022-2" defer></script>
-  <script src="assets/js/store.js?v=20261021-15" defer></script>
+  <script src="assets/js/store.js?v=20261023-h1" defer></script>
   <script src="assets/js/regles.js?v=20261021-15" defer></script>
   <script src="assets/js/objectifs.js?v=20261021-15" defer></script>
   <script src="assets/js/parser.js?v=20261021-15" defer></script>
@@ -147,6 +147,6 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
   <script src="assets/js/perf_partenaire.js?v=20261022-m2" defer></script>
   <script src="assets/js/export.js?v=20261021-15" defer></script>
   <script src="assets/js/partage.js?v=20261023-m1" defer></script>
-  <script src="assets/js/app.js?v=20261023-m1" defer></script>
+  <script src="assets/js/app.js?v=20261023-h1" defer></script>
 </body>
 </html>
