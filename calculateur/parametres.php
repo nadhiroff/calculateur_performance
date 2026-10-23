@@ -20,7 +20,7 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous">
   <link rel="stylesheet" href="assets/css/design-system.css?v=20261021-15">
   <link rel="stylesheet" href="assets/css/components.css?v=20261023-m1">
-  <link rel="stylesheet" href="assets/css/dashboard.css?v=20261023-c2">
+  <link rel="stylesheet" href="assets/css/dashboard.css?v=20261023-v2">
   <style>
     :root { --header-h: 72px; }
     .param-bar { display: flex; gap: var(--sp-3); flex-wrap: wrap; align-items: flex-end; margin-bottom: var(--sp-5); padding: var(--sp-4); }

@@ -59,6 +59,7 @@ main { padding: var(--sp-6) 0 var(--sp-16); }
 .activity { list-style: none; margin: 0; padding: 0; display: grid; }
 .activity li { display: grid; grid-template-columns: 32px 1fr auto; gap: var(--sp-3); align-items: center; padding: var(--sp-3) 0; border-bottom: 1px solid var(--border); }
 .activity li:last-child { border-bottom: 0; }
+.activity { max-height: 390px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding-right: 4px; }   /* ~6 imports visibles, les autres en défilant */
 .activity .ic { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; font-size: 13px; background: var(--pos-soft); color: var(--pos-text); }
 .activity .ic.neg { background: var(--neg-soft); color: var(--neg-text); } .activity .ic.info { background: var(--info-soft); color: var(--info-text); }
 .activity .nm { font-weight: 600; font-size: var(--fs-13); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -91,6 +92,12 @@ main { padding: var(--sp-6) 0 var(--sp-16); }
 /* ---- Graphiques ---- */
 .chart-box { position: relative; height: 240px; min-width: 0; }
 .chart-box canvas { max-width: 100%; } .chart-box.tall { height: 280px; }
+/* Graphique à côté d'une carte plus haute (Volume par mois / Derniers imports) : il occupe toute la hauteur, sans espace vide */
+@media (min-width: 1100px) {
+  .card-remplie { display: flex; flex-direction: column; }
+  .card-remplie > .chart-box { flex: 1 1 0; min-height: 240px; height: auto; }
+  .card-remplie > .chart-box canvas { position: absolute; inset: 0; }
+}
 
 /* Tableau performance login condensé */
 #perf-login-table table.data th, #perf-login-table table.data td { padding: 6px var(--sp-2); font-size: var(--fs-12); white-space: nowrap; }

@@ -204,8 +204,8 @@
         </div>
       </div>
       <div class="grid-3-1">
-        <section class="card"><div class="card-head"><div><h3>Volume par mois</h3><p>Souscriptions enregistrées et ventes validées (OK)${s.par_mois.length > 12 ? ' · 12 derniers mois de la période' : ''}</p></div></div><div class="chart-box"><canvas id="ch-mois" role="img" aria-label="Souscriptions par mois"></canvas></div></section>
-        <section class="card"><div class="card-head"><div><h3>Derniers imports</h3><p>Journal des fichiers traités</p></div></div>
+        <section class="card card-remplie"><div class="card-head"><div><h3>Volume par mois</h3><p>Souscriptions enregistrées et ventes validées (OK)${s.par_mois.length > 12 ? ' · 12 derniers mois de la période' : ''}</p></div></div><div class="chart-box"><canvas id="ch-mois" role="img" aria-label="Souscriptions par mois"></canvas></div></section>
+        <section class="card"><div class="card-head"><div><h3>Derniers imports</h3><p>Journal des fichiers traités${im.derniers.length > 6 ? ' · ' + im.derniers.length + ' derniers, faites défiler' : ''}</p></div></div>
           <ul class="activity">${im.derniers.map((i) => { const [ic, cls, txt] = lib[i.statut] || lib.en_cours;
             const det = i.statut === 'ok' && i.nouvelles != null ? n(i.nouvelles) + ' nouvelle(s) · ' + n(i.modifiees || 0) + ' modifiée(s)' + (i.feuilles ? ' · ' + i.feuilles + ' feuille(s)' : '') : i.type === 'objectifs' ? 'Objectifs mensuels' : (i.erreur || '');
             return `<li><span class="ic ${cls}" aria-hidden="true"><i class="fa-solid ${ic}"></i></span><div><div class="nm" title="${CT.esc(i.nom)}">${CT.esc(i.nom)}</div><small title="${CT.esc(det)}">${CT.esc(det)}</small></div><div style="text-align:right"><span class="badge ${cls === 'neg' ? 'badge-neg' : cls ? 'badge-info' : 'badge-pos'}">${txt}</span><small>${i.date ? depuis(i.date) : ''}</small></div></li>`; }).join('') || '<li class="muted">Aucun import.</li>'}</ul></section>

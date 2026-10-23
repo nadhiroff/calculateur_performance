@@ -56,7 +56,7 @@ final class SyntheseController
             'modifiees' => $i['stats']['modifiees'] ?? null,
             'feuilles' => isset($i['stats']['feuilles']) ? count(array_filter($i['stats']['feuilles'], static fn (array $f) => $f['statut'] === 'importee')) : null,
             'erreur' => $i['erreur'] ? mb_substr($i['erreur'], 0, 160) : null,
-        ], Import::derniers(6));
+        ], Import::derniers(30));   // la liste défile au-delà de 6 lignes (dashboard.css)
 
         return Response::json([
             'annee' => $annee,
