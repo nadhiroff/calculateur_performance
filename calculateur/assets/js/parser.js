@@ -129,18 +129,43 @@
       return { feuille, entetes, enteteBrut: aoa[hi], lignes, stats: { vides, dateInvalide, incoherentes, lu: corps.length } };
     },
 
-    /* Classe les lignes : segment B2B/B2C selon les règles, partenaire selon la configuration */
+    /* Partenaire d'une vente (cahier des charges, même règle que HistoriqueVentes::classifieur côté serveur) :
+         1. login dans une liste nominative (logins_partenaire, ex. POP&SHOP) ;
+         2. remplacements_login, dans l'ordre : le login « contient » le motif (casse ignorée) → partenaire. Comme le script
+            d'origine, chaque motif est testé sur la valeur déjà remplacée (en pratique : le premier motif trouvé l'emporte) ;
+         3. login non reconnu : motifs d'agence (POP, Celtiis Shop → POP&SHOP : nouvelles recrues sans préfixe), sinon défaut.
+       Renvoie (login, agence) → { partenaire, via: 'liste' | 'login' | 'agence' | 'defaut', motif } */
+    partenaireDe(cfg) {
+      const nominatif = new Map();
+      Object.entries(cfg.logins_partenaire || {}).forEach(([p, ls]) => (ls || []).forEach((x) => nominatif.set(CT.cleLogin(x), p)));
+      const remp = (cfg.remplacements_login || []).filter((r) => r && String(r.motif || '')).map((r) => ({ motif: String(r.motif).toLowerCase(), nom: r.partenaire }));
+      const agences = (cfg.regles_agence || []).flatMap((r) => { try { return [{ re: new RegExp(r.motif, 'i'), nom: r.partenaire }]; } catch (e) { return []; } });
+      return (login, agence) => {
+        const brut = String(login == null ? '' : login).trim();
+        let v = brut, via = null, motif = null;
+        if (nominatif.has(CT.cleLogin(brut))) { v = nominatif.get(CT.cleLogin(brut)); via = 'liste'; }
+        for (const r of remp) {
+          if (v.toLowerCase().includes(r.motif)) { if (!via) { via = 'login'; motif = r.motif; } v = r.nom; }
+        }
+        if (via) return { partenaire: v, via, motif };
+        const hit = agences.find((x) => x.re.test(String(agence || '').trim()));
+        return hit ? { partenaire: hit.nom, via: 'agence', motif: null } : { partenaire: cfg.defaut || 'AUTRES', via: 'defaut', motif: null };
+      };
+    },
+
+    /* Classe les lignes : segment B2B/B2C, partenaire (partenaireDe) et offre comptée ou non (regles.offres_comptees) */
     classer(lignes, regles, cfgPartenaires) {
-      const res = (cfgPartenaires.regles_agence || []).map((r) => ({ re: new RegExp(r.motif, 'i'), nom: r.partenaire }));
-      const alias = cfgPartenaires.alias_login || {};
+      const partenaire = CT.parser.partenaireDe(cfgPartenaires), offreOk = CT.regles.filtreOffres(regles);
       for (const l of lignes) {
         l.segment = CT.regles.estB2B(regles, l.typeClient) ? 'B2B' : 'B2C';
-        const m = /^(?:pvt|pms|stg)[_-]([a-z0-9]+)[_-]/.exec(l.login);
-        if (m) { l.partenaire = alias[m[1]] || m[1].toUpperCase(); l.viaLogin = true; }
-        else { const hit = res.find((x) => x.re.test(l.agence)); l.partenaire = hit ? hit.nom : (cfgPartenaires.defaut || 'AUTRES'); l.viaLogin = false; }
+        const p = partenaire(l.login, l.agence);
+        l.partenaire = p.partenaire; l.via = p.via; l.motif = p.motif; l.viaLogin = p.via === 'liste' || p.via === 'login';
+        l.offreComptee = offreOk(l.offre);
       }
       return lignes;
     },
+    /* Lignes retenues pour les calculs : offres comptées seulement (les autres offres sont ignorées partout) */
+    retenues(lignes) { return lignes.filter((l) => l.offreComptee !== false); },
 
     /* Rapport qualité : [{id, label, count, niveau, detail}] + drapeau bloquant */
     controleQualite(res, regles) {
@@ -162,8 +187,20 @@
       add('incoh', 'Dates incohérentes (provisioning/mise à jour avant la commande)', stats.incoherentes, 'warn');
       const sansLogin = lignes.filter((l) => !l.login).length;
       add('login', 'Lignes sans LOGIN_VENDEUR', sansLogin, 'warn');
-      const nonPart = lignes.filter((l) => l.viaLogin === false).length;
-      if (nonPart) out.push({ id: 'part', label: 'Logins sans nom de partenaire', count: nonPart, niveau: 'info', detail: 'Rattachés par agence (POP&SHOP, etc.) ou « AUTRES » — modifiable dans Paramètres › Partenaires.' });
+      // Offres hors liste : ignorées dans tous les calculs
+      const hors = {}; lignes.forEach((l) => { if (l.offreComptee === false) hors[l.offre || '(vide)'] = (hors[l.offre || '(vide)'] || 0) + 1; });
+      const nHors = Object.values(hors).reduce((a, b) => a + b, 0);
+      if (nHors) out.push({ id: 'offres', label: 'Lignes hors offres comptées (ignorées dans les calculs)', count: nHors, niveau: 'info', detail: Object.entries(hors).sort((a, b) => b[1] - a[1]).map(([k, v]) => k + ' ×' + v).join(', ') + ' — liste modifiable dans Paramètres › Règles.' });
+      // Partenaires (lignes retenues) : « login [agence] ×n », regroupés
+      const retenues = lignes.filter((l) => l.offreComptee !== false);
+      const liste = (ls) => { const c = {}; ls.forEach((l) => { const k = (l.login || '(vide)') + ' [' + (l.agence || '?') + ']' + (l.motif ? ' → ' + l.partenaire + ' (« ' + l.motif + ' »)' : ''); c[k] = (c[k] || 0) + 1; }); return Object.entries(c).sort((a, b) => b[1] - a[1]).map(([k, n]) => k + ' ×' + n).join(', '); };
+      const parAgence = retenues.filter((l) => l.via === 'agence');
+      if (parAgence.length) out.push({ id: 'part-agence', label: 'Nouveaux logins rattachés par leur agence (POP / Celtiis Shop → POP&SHOP)', count: parAgence.length, niveau: 'warn', detail: liste(parAgence) + ' — à ajouter à la liste POP&SHOP dans Paramètres › Partenaires.' });
+      const inconnus2 = retenues.filter((l) => l.via === 'defaut');
+      if (inconnus2.length) out.push({ id: 'part-defaut', label: 'Logins non reconnus (comptés dans « ' + inconnus2[0].partenaire + ' »)', count: inconnus2.length, niveau: 'warn', detail: liste(inconnus2) + ' — ajoutez un remplacement ou le login à une liste dans Paramètres › Partenaires.' });
+      // Motif court trouvé au milieu d'un mot (ex. « rad » dans « conrad ») : rattachement possiblement fortuit, à vérifier
+      const douteux = retenues.filter((l) => l.via === 'login' && l.motif && l.motif.length <= 4 && !new RegExp('(^|[^a-z])' + l.motif.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).test(l.login));
+      if (douteux.length) out.push({ id: 'part-douteux', label: 'Logins rattachés par un motif court en milieu de mot (à vérifier)', count: douteux.length, niveau: 'info', detail: liste(douteux) });
       const jours = lignes.filter((l) => l.jour).map((l) => l.jour).sort();
       return { items: out, bloquant: !lignes.length || stats.dateInvalide === lignes.length, du: jours[0] || null, au: jours[jours.length - 1] || null };
     },

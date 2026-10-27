@@ -3,6 +3,12 @@
   "statuts_comptes": [
     "OK"
   ],
+  "offres_comptees": [
+    "Offre FTTH Home Public refonte",
+    "Offre FTTO Office B2B",
+    "Offre FTTO Pro B2B",
+    "Offre FTTO Pro Max & Méga"
+  ],
   "segment_b2b": {
     "champ": "TYPE_CLIENT",
     "valeur": "ORGANISATION"

@@ -103,14 +103,14 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
   <input type="file" id="file-xlsx" accept=".xls,.xlsx" class="sr-only" tabindex="-1" aria-label="Importer un fichier Excel">
   <input type="file" id="file-json" accept=".json,application/json" class="sr-only" tabindex="-1" aria-label="Importer un fichier JSON">
 
-  <script src="config/defaults.js?v=20261021-15" defer></script>
+  <script src="config/defaults.js?v=20261027-offres" defer></script>
   <!-- SheetJS avec styles (en-têtes Excel en gras sur fond gris) ; repli automatique sur SheetJS standard si indisponible -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js" defer crossorigin="anonymous"></script>
   <script src="assets/js/utils.js?v=20261022-3" defer></script>
   <script src="assets/js/api.js?v=20261022-2" defer></script>
-  <script src="assets/js/store.js?v=20261023-h1" defer></script>
-  <script src="assets/js/regles.js?v=20261021-15" defer></script>
+  <script src="assets/js/store.js?v=20261027-offres" defer></script>
+  <script src="assets/js/regles.js?v=20261027-offres" defer></script>
   <script src="assets/js/objectifs.js?v=20261021-15" defer></script>
-  <script src="assets/js/parametres.js?v=20261023-h1" defer></script>
+  <script src="assets/js/parametres.js?v=20261027-offres" defer></script>
 </body>
 </html>

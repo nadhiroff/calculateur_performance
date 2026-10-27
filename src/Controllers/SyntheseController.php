@@ -7,9 +7,12 @@ use App\Http\Request;
 use App\Http\Response;
 use App\Http\Valider;
 use App\Models\Import;
+use App\Services\AgentTableau;
+use App\Support\OffresComptees;
 
 /**
  * Vue d'ensemble (tableau de bord du Directeur) : quelques agrégats SQL, quel que soit le volume (plusieurs années comprises).
+ * Seules les offres comptées du mois (regles.offres_comptees) entrent dans les totaux ; « validées » = statuts comptés du mois.
  * Période = ?du=AAAA-MM-JJ&au=AAAA-MM-JJ (dates choisies dans l'interface) ; sans période : l'ANNÉE CIVILE EN COURS.
  * Le graphique montre les mois de la période (au plus les 12 derniers) ; le journal des imports reste celui des derniers fichiers.
  */
@@ -28,12 +31,49 @@ final class SyntheseController
             [$debut, $fin] = [$fin, $debut];
         }
 
-        $parMois = array_map(static fn (array $m) => ['mois' => $m['mois'], 'lignes' => (int) $m['lignes'], 'ok' => (int) $m['ok'], 'ca_ok' => (float) $m['ca_ok']], Db::select(
-            "SELECT `mois`, COUNT(*) AS lignes, SUM(CASE WHEN `statut` = 'OK' THEN 1 ELSE 0 END) AS ok, SUM(CASE WHEN `statut` = 'OK' THEN `montant_total` ELSE 0 END) AS ca_ok FROM `celtiis_datas` WHERE `jour` BETWEEN ? AND ? GROUP BY `mois` ORDER BY `mois`",
-            [$debut, $fin]
-        ));
+        // Offres et statuts comptés de chaque mois (mêmes règles que les calculs) : les autres offres sont ignorées
+        $regles = [];
+        $regle = static function (string $mois) use (&$regles): array {
+            if (! isset($regles[$mois])) {
+                $R = AgentTableau::parametres($mois)['regles'];
+                $regles[$mois] = [array_map('strval', $R['statuts_comptes'] ?? ['OK']), OffresComptees::filtre($R)];
+            }
 
-        $distincts = Db::first('SELECT COUNT(DISTINCT `login_key`) AS vendeurs, COUNT(DISTINCT `agence`) AS agences, COUNT(DISTINCT `nom_offre`) AS offres, MIN(`jour`) AS du, MAX(`jour`) AS au FROM `celtiis_datas` WHERE `jour` BETWEEN ? AND ?', [$debut, $fin]) ?? [];
+            return $regles[$mois];
+        };
+        $parMois = [];
+        foreach (Db::select(
+            'SELECT `mois`, `statut`, `nom_offre`, COUNT(*) AS lignes, SUM(`montant_total`) AS ca FROM `celtiis_datas` WHERE `jour` BETWEEN ? AND ? GROUP BY `mois`, `statut`, `nom_offre` ORDER BY `mois`',
+            [$debut, $fin]
+        ) as $r) {
+            [$statuts, $offreOk] = $regle((string) $r['mois']);
+            if (! $offreOk($r['nom_offre'])) {
+                continue;
+            }
+            $m = &$parMois[$r['mois']];
+            $m ??= ['mois' => $r['mois'], 'lignes' => 0, 'ok' => 0, 'ca_ok' => 0.0];
+            $m['lignes'] += (int) $r['lignes'];
+            if (in_array((string) $r['statut'], $statuts, true)) {
+                $m['ok'] += (int) $r['lignes'];
+                $m['ca_ok'] += (float) $r['ca'];
+            }
+            unset($m);
+        }
+        $parMois = array_values($parMois);
+
+        $vendeurs = $agences = $offres = [];
+        $du0 = $au0 = null;
+        foreach (Db::select('SELECT `mois`, `nom_offre`, `login_key`, `agence`, MIN(`jour`) AS du, MAX(`jour`) AS au FROM `celtiis_datas` WHERE `jour` BETWEEN ? AND ? GROUP BY `mois`, `nom_offre`, `login_key`, `agence`', [$debut, $fin]) as $r) {
+            if (! $regle((string) $r['mois'])[1]($r['nom_offre'])) {
+                continue;
+            }
+            $vendeurs[(string) $r['login_key']] = 1;
+            $agences[(string) $r['agence']] = 1;
+            $offres[OffresComptees::cle((string) $r['nom_offre'])] = 1;
+            $du0 = $du0 === null || $r['du'] < $du0 ? $r['du'] : $du0;
+            $au0 = $au0 === null || $r['au'] > $au0 ? $r['au'] : $au0;
+        }
+        $distincts = ['vendeurs' => count($vendeurs), 'agences' => count($agences), 'offres' => count($offres), 'du' => $du0, 'au' => $au0];
 
         // Imports de la période : fichiers dont les données recoupent la période (stats du / au), sinon faits pendant la période (échecs, objectifs)
         $imports = [];

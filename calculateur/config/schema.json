@@ -50,6 +50,7 @@
       "required": ["agent", "superviseur"],
       "properties": {
         "statuts_comptes": { "type": "array", "items": { "type": "string" } },
+        "offres_comptees": { "type": "array", "items": { "type": "string" }, "description": "NOM_OFFRE comptés (casse, accents et espaces ignorés) ; liste vide = toutes les offres" },
         "segment_b2b": { "type": "object", "properties": { "champ": { "type": "string" }, "valeur": { "type": "string" } } },
         "seuil_montant_atypique": { "type": "number" },
         "agent": { "type": "object", "properties": { "journee_reussie": { "type": "number" }, "champion_du_jour": { "type": "object", "properties": { "prime": { "type": "number" }, "exige_objectif": { "type": "boolean" } } }, "paliers_tro": { "$ref": "#/definitions/paliers" }, "bonus_b2b": { "type": "number" } } },
@@ -58,10 +59,12 @@
       }
     },
     "partenaires": {
-      "type": "object", "required": ["alias_login"],
+      "type": "object", "required": ["remplacements_login"],
       "properties": {
         "prioritaire": { "type": "string" }, "defaut": { "type": "string" },
-        "alias_login": { "type": "object", "additionalProperties": { "type": "string" }, "description": "jeton du login (pvt_<jeton>_nom) → nom du partenaire" },
+        "version_regles": { "type": "integer", "description": "version du format des règles partenaires (2 = cahier des charges : liste nominative puis remplacements)" },
+        "logins_partenaire": { "type": "object", "additionalProperties": { "type": "array", "items": { "type": "string" } }, "description": "partenaire → logins sans préfixe (ex. POP&SHOP), testés en premier" },
+        "remplacements_login": { "type": "array", "items": { "type": "object", "required": ["motif", "partenaire"], "properties": { "motif": { "type": "string" }, "partenaire": { "type": "string" } } }, "description": "le LOGIN_VENDEUR contient le motif (casse ignorée) → partenaire ; appliqués dans l'ordre" },
         "regles_agence": { "type": "array", "items": { "type": "object", "properties": { "motif": { "type": "string" }, "partenaire": { "type": "string" } } } },
         "historique": { "type": "object", "properties": { "annee": { "type": "integer" }, "mois": { "type": "array", "items": { "type": "string" } }, "partenaires": { "type": "object", "additionalProperties": { "type": "array", "items": { "type": "number" } } } } }
       }

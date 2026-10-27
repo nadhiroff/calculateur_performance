@@ -8,13 +8,14 @@ use App\Models\MensualObjective;
 use App\Models\MensualSetting;
 use App\Support\Cache;
 use App\Support\LoginKey;
+use App\Support\OffresComptees;
 
 /**
  * Espace commercial RGZ : résultats d'UN login et de SON équipe, calculés côté serveur.
  * Le navigateur du commercial ne reçoit jamais les ventes des autres : seulement des totaux par membre de son équipe.
  *
  * Mêmes règles que le tableau de bord RGZ (calculs.js → motivation()) pour le mois de la date de fin :
- *   ventes comptées = statut dans regles.statuts_comptes ; B2B = TYPE_CLIENT égal à regles.segment_b2b.valeur ;
+ *   ventes comptées = statut dans regles.statuts_comptes ET offre dans regles.offres_comptees (OffresComptees) ; B2B = TYPE_CLIENT égal à regles.segment_b2b.valeur ;
  *   objectif jour = valeur du fichier, ou objectif du mois ÷ jours ouvrés (mode « calcul » ou valeur absente) ;
  *   objectif à date = arrondi(objectif jour × jours ouvrés écoulés) ; TRO = ventes du mois ÷ objectif du mois ;
  *   journée réussie = jour ouvré où ventes ≥ objectif jour ; champion du jour = meilleur ratio ventes / objectif jour (tout RGZ) ;
@@ -34,10 +35,11 @@ final class AgentTableau
     {
         // Partie commune à tous les commerciaux (identique pour tous sur une même période) : calculée une fois, puis relue
         // en cache ; la version des données dans la clé la renouvelle à chaque import / modification des paramètres.
-        $c = Cache::memoriser('agent-commun-v3:'.$du.':'.$au.':'.Cache::version(), 600, static fn () => self::commun($du, $au));
+        $c = Cache::memoriser('agent-commun-v4:'.$du.':'.$au.':'.Cache::version(), 600, static fn () => self::commun($du, $au));
         ['mois' => $mois, 'debutMois' => $debutMois, 'p' => $p, 'agents' => $agents, 'parJour' => $parJour, 'ouvresEcoules' => $ouvresEcoules] = $c;
         $R = $p['regles'];
         $statuts = array_values(array_map('strval', $R['statuts_comptes'] ?? ['OK']));
+        $offreOk = OffresComptees::filtre($R);
         $valeurB2B = mb_strtoupper((string) ($R['segment_b2b']['valeur'] ?? 'ORGANISATION'));
         $A = $R['agent'] ?? [];
         $ouvres = array_map('intval', $p['calendrier']['ouvres'] ?? []);
@@ -47,7 +49,7 @@ final class AgentTableau
         $equipeNom = $moi['equipe'] ?? self::derniereEquipe($cleAgent);
         if ($moi === null) {
             // Commercial absent des objectifs du mois : ses propres ventes ne sont pas dans la partie commune
-            $parJour[$cleAgent] = self::ventesParJour([$cleAgent], min($du, $debutMois), $au, $statuts, $valeurB2B)[$cleAgent] ?? [];
+            $parJour[$cleAgent] = self::ventesParJour([$cleAgent], min($du, $debutMois), $au, $statuts, $offreOk, $valeurB2B)[$cleAgent] ?? [];
         }
         $somme = static function (string $cle, string $de, string $a, int $col = 0) use ($parJour): int {
             $t = 0;
@@ -73,9 +75,13 @@ final class AgentTableau
         $joursPeriode = self::jours($du, $au);
         $objJours = self::objectifsParJour($cleAgent, $du, $au);
         $statutsPeriode = [];
-        foreach (Db::select('SELECT `statut`, COUNT(*) AS n FROM `celtiis_datas` WHERE `login_key` = ? AND `jour` BETWEEN ? AND ? GROUP BY `statut` ORDER BY n DESC', [$cleAgent, $du, $au]) as $r) {
-            $statutsPeriode[(string) $r['statut']] = (int) $r['n'];
+        // Offres non comptées : ignorées (ni ventes, ni « en attente »)
+        foreach (Db::select('SELECT `statut`, `nom_offre`, COUNT(*) AS n FROM `celtiis_datas` WHERE `login_key` = ? AND `jour` BETWEEN ? AND ? GROUP BY `statut`, `nom_offre`', [$cleAgent, $du, $au]) as $r) {
+            if ($offreOk($r['nom_offre'])) {
+                $statutsPeriode[(string) $r['statut']] = ($statutsPeriode[(string) $r['statut']] ?? 0) + (int) $r['n'];
+            }
         }
+        arsort($statutsPeriode);
         $attente = array_sum(array_diff_key($statutsPeriode, array_flip($statuts)));
 
         $mesVentes = $somme($cleAgent, $du, $au);
@@ -103,7 +109,7 @@ final class AgentTableau
                 ],
             ],
             'equipe' => self::equipe($equipeNom, $agents, $p, $ouvresEcoules, $cleAgent, $du, $au, $somme),
-            'ventes' => self::liste($cleAgent, $du, $au, $statuts, $valeurB2B),
+            'ventes' => self::liste($cleAgent, $du, $au, $statuts, $offreOk, $valeurB2B),
             'calendrier' => ['ouvres_ecoules' => $ouvresEcoules, 'herite' => $p['herite']],
         ];
 
@@ -143,6 +149,7 @@ final class AgentTableau
         $p = self::parametres($mois);
         $R = $p['regles'];
         $statuts = array_values(array_map('strval', $R['statuts_comptes'] ?? ['OK']));
+        $offreOk = OffresComptees::filtre($R);
         $valeurB2B = mb_strtoupper((string) ($R['segment_b2b']['valeur'] ?? 'ORGANISATION'));
         $ouvres = array_map('intval', $p['calendrier']['ouvres'] ?? []);
         $estOuvre = static fn (string $j): bool => substr($j, 0, 7) === $mois && in_array((int) substr($j, 8, 2), $ouvres, true);
@@ -151,7 +158,7 @@ final class AgentTableau
 
         // Tous les commerciaux RGZ du mois (nécessaires au champion du jour et au rang), dans l'ordre des objectifs
         $agents = self::agentsDuMois($p);
-        $parJour = $agents ? self::ventesParJour(array_keys($agents), min($du, $debutMois), $au, $statuts, $valeurB2B) : [];
+        $parJour = $agents ? self::ventesParJour(array_keys($agents), min($du, $debutMois), $au, $statuts, $offreOk, $valeurB2B) : [];
         $somme = static function (string $cle, string $de, string $a, int $col = 0) use ($parJour): int {
             $t = 0;
             foreach ($parJour[$cle] ?? [] as $j => $v) {
@@ -210,22 +217,27 @@ final class AgentTableau
     }
 
     /**
-     * Ventes comptées par login et par jour : clé → jour → [ventes, dont B2B].
+     * Ventes comptées (statut ET offre comptés) par login et par jour : clé → jour → [ventes, dont B2B].
      *
      * @param  string[]  $cles
      * @param  string[]  $statuts
+     * @param  \Closure(?string): bool  $offreOk
      * @return array<string, array<string, array{0: int, 1: int}>>
      */
-    private static function ventesParJour(array $cles, string $du, string $au, array $statuts, string $valeurB2B): array
+    private static function ventesParJour(array $cles, string $du, string $au, array $statuts, \Closure $offreOk, string $valeurB2B): array
     {
         $out = [];
         foreach (Db::select(
-            'SELECT `login_key`, `jour`, COUNT(*) AS n, SUM(UPPER(COALESCE(`type_client`, \'\')) = ?) AS b2b FROM `celtiis_datas`'
+            'SELECT `login_key`, `jour`, `nom_offre`, COUNT(*) AS n, SUM(UPPER(COALESCE(`type_client`, \'\')) = ?) AS b2b FROM `celtiis_datas`'
             .' WHERE `jour` BETWEEN ? AND ? AND `statut` IN ('.Db::marques(count($statuts)).') AND `login_key` IN ('.Db::marques(count($cles)).')'
-            .' GROUP BY `login_key`, `jour`',
+            .' GROUP BY `login_key`, `jour`, `nom_offre`',
             [$valeurB2B, $du, $au, ...$statuts, ...$cles]
         ) as $r) {
-            $out[$r['login_key']][$r['jour']] = [(int) $r['n'], (int) $r['b2b']];
+            if (! $offreOk($r['nom_offre'])) {
+                continue;
+            }
+            $v = $out[$r['login_key']][$r['jour']] ?? [0, 0];
+            $out[$r['login_key']][$r['jour']] = [$v[0] + (int) $r['n'], $v[1] + (int) $r['b2b']];
         }
 
         return $out;
@@ -421,23 +433,27 @@ final class AgentTableau
     }
 
     /**
-     * Détail de mes ventes de la période (nom complet du client, espaces et retours à la ligne normalisés).
+     * Détail de mes ventes de la période (nom complet du client, espaces et retours à la ligne normalisés) :
+     * offres comptées seulement, les autres sont ignorées comme dans les calculs.
      *
      * @param  string[]  $statuts
+     * @param  \Closure(?string): bool  $offreOk
      * @return array<int, array<string, mixed>>
      */
-    private static function liste(string $cle, string $du, string $au, array $statuts, string $valeurB2B): array
+    private static function liste(string $cle, string $du, string $au, array $statuts, \Closure $offreOk, string $valeurB2B): array
     {
+        $lignes = array_filter(Db::select(
+            'SELECT `date_commande`, `nom_offre`, `type_client`, `statut`, `montant_total`, `client_nom` FROM `celtiis_datas`'
+            .' WHERE `login_key` = ? AND `jour` BETWEEN ? AND ? ORDER BY `date_commande` DESC',
+            [$cle, $du, $au]
+        ), static fn (array $r) => $offreOk($r['nom_offre']));
+
         return array_map(static fn (array $r) => [
             'date' => $r['date_commande'], 'offre' => $r['nom_offre'],
             'segment' => mb_strtoupper((string) $r['type_client']) === $valeurB2B ? 'B2B' : 'B2C',
             'statut' => $r['statut'], 'compte' => in_array($r['statut'], $statuts, true),
             'montant' => (float) $r['montant_total'], 'client' => trim((string) preg_replace('/\s+/u', ' ', (string) $r['client_nom'])) ?: '—',
-        ], Db::select(
-            'SELECT `date_commande`, `nom_offre`, `type_client`, `statut`, `montant_total`, `client_nom` FROM `celtiis_datas`'
-            .' WHERE `login_key` = ? AND `jour` BETWEEN ? AND ? ORDER BY `date_commande` DESC LIMIT '.self::LISTE_MAX,
-            [$cle, $du, $au]
-        ));
+        ], array_slice(array_values($lignes), 0, self::LISTE_MAX));
     }
 
 

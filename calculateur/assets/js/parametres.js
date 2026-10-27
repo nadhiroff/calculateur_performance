@@ -280,14 +280,18 @@
         paliers('Paliers superviseurs (TRO équipe)', 'superviseur.paliers_tro'),
         h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('div', {}, h('h3', {}, 'Comptage des ventes'), h('p', {}, 'Conforme aux fichiers : seules les ventes « OK » comptent ; « VALIDE » = en attente.'))),
           h('div', { class: 'form-grid' }, champ('st', 'Statuts comptés (séparés par une virgule)', R, 'statuts_comptes', { texte: true, liste: true }), champ('sb', 'B2B = TYPE_CLIENT égal à', R, 'segment_b2b.valeur', { texte: true }),
-            champ('sx', 'Seuil de montant atypique (FCFA)', R, 'seuil_montant_atypique', { aide: 'Au-delà, la ligne est exclue du CA (sauf case cochée au dashboard).' }))),
+            champ('sx', 'Seuil de montant atypique (FCFA)', R, 'seuil_montant_atypique', { aide: 'Au-delà, la ligne est exclue du CA (sauf case cochée au dashboard).' })),
+          h('div', { class: 'field' }, h('label', { for: 'oc' }, 'Offres comptées (NOM_OFFRE, une par ligne)'),
+            h('textarea', { class: 'input', id: 'oc', rows: '5',
+              onchange: (e) => { R.offres_comptees = [...new Set(e.target.value.split(/\r?\n/).map((x) => x.trim()).filter(Boolean))]; enregistrer(); rendreRegles(); } }, CT.regles.offresComptees(R).join('\n')),
+            h('span', { class: 'hint' }, 'Seules ces offres entrent dans les calculs (primes, performance, exports) ; les autres lignes restent en base mais sont ignorées. Casse, accents et espaces ignorés. Liste vide = toutes les offres.'))),
         h('p', { class: 'hint' }, 'Les commissions one-shot (B2C / B2B) et la part RGZ se règlent dans l\'onglet Objectifs.')));
   }
   function exporterRegles() {
     const R = P().regles, wb = XLSX.utils.book_new();
     const sc = [['Clé', 'Valeur'], ['agent.journee_reussie', R.agent.journee_reussie], ['agent.champion_du_jour.prime', R.agent.champion_du_jour.prime], ['agent.bonus_b2b', R.agent.bonus_b2b], ['superviseur.journee_equipe', R.superviseur.journee_equipe],
       ['superviseur.activation.seuil_agent', R.superviseur.activation.seuil_agent], ['superviseur.activation.taux_min', R.superviseur.activation.taux_min], ['superviseur.trophee.enveloppe', R.superviseur.trophee.enveloppe], ['superviseur.trophee.tro_min', R.superviseur.trophee.tro_min],
-      ['seuil_montant_atypique', R.seuil_montant_atypique], ['statuts_comptes', (R.statuts_comptes || []).join(', ')], ['segment_b2b.valeur', (R.segment_b2b || {}).valeur]];
+      ['seuil_montant_atypique', R.seuil_montant_atypique], ['statuts_comptes', (R.statuts_comptes || []).join(', ')], ['offres_comptees', CT.regles.offresComptees(R).join(' | ')], ['segment_b2b.valeur', (R.segment_b2b || {}).valeur]];
     const add = (nom, aoa, cols) => { const ws = XLSX.utils.aoa_to_sheet(aoa); ws['!cols'] = cols.map((w) => ({ wch: w })); CT.styleEntete(ws); XLSX.utils.book_append_sheet(wb, ws, nom); };
     add('Paramètres', sc, [38, 20]);
     add('Paliers agents', [['Palier', 'Seuil TRO', 'Prime']].concat(R.agent.paliers_tro.map((p) => [p.nom, p.seuil, p.prime])), [18, 12, 12]);
@@ -299,7 +303,7 @@
     const sc = lig('Paramètres'), pa = lig('Paliers agents'), ps = lig('Paliers superviseurs');
     if (!sc && !pa && !ps) { CT.toast('Feuilles « Paramètres », « Paliers agents » ou « Paliers superviseurs » introuvables : utilisez le modèle exporté.', 'err', 8000); return; }
     if (!(await CT.confirmer('Importer les règles', 'Remplacer les règles de ' + CT.date.libelleMois(cle) + ' par celles du fichier ?', 'Remplacer'))) return;
-    (sc || []).forEach(([k, v]) => { if (k === 'statuts_comptes') ecrire(R, k, String(v).split(',').map((x) => x.trim().toUpperCase()).filter(Boolean)); else if (k === 'segment_b2b.valeur') ecrire(R, k, String(v)); else if (lire(R, k) !== undefined) ecrire(R, k, nombre(v)); });
+    (sc || []).forEach(([k, v]) => { if (k === 'offres_comptees') ecrire(R, k, [...new Set(String(v == null ? '' : v).split(/\s*[|\r\n]+\s*/).map((x) => x.trim()).filter(Boolean))]); else if (k === 'statuts_comptes') ecrire(R, k, String(v).split(',').map((x) => x.trim().toUpperCase()).filter(Boolean)); else if (k === 'segment_b2b.valeur') ecrire(R, k, String(v)); else if (lire(R, k) !== undefined) ecrire(R, k, nombre(v)); });
     if (pa) R.agent.paliers_tro = pa.map((r) => ({ nom: String(r[0]), seuil: nombre(r[1]), prime: nombre(r[2]) })).sort((a, b) => a.seuil - b.seuil);
     if (ps) R.superviseur.paliers_tro = ps.map((r) => ({ nom: String(r[0]), seuil: nombre(r[1]), prime: nombre(r[2]) })).sort((a, b) => a.seuil - b.seuil);
     enregistrer(); rendreRegles(); CT.toast('Règles importées.', 'ok');
@@ -323,8 +327,12 @@
       } }, h('i', { class: 'fa-solid fa-plus', 'aria-hidden': 'true' }), 'Ajouter')),
         h('div', { class: 'table-wrap' }, h('table', { class: 'data' }, entete(cols.map((c) => ({ t: c.t, auto: c.auto })).concat([{ t: '' }])), tb)));
     };
-    const alias = Object.entries(C.alias_login).map(([k, v]) => ({ k, v }));
-    const sync = () => { C.alias_login = Object.fromEntries(alias.map((a) => [a.k.toLowerCase(), a.v.toUpperCase()])); };
+    C.remplacements_login = C.remplacements_login || [];
+    const nominatif = Object.entries(C.logins_partenaire || {}).flatMap(([p, ls]) => (ls || []).map((l) => ({ l, p })));
+    const syncNominatif = () => {
+      const o = {}; nominatif.forEach((x) => { const p = String(x.p).trim().toUpperCase(); if (x.l && p) (o[p] = o[p] || []).push(x.l); });
+      C.logins_partenaire = o;
+    };
     const anneeCourante = new Date().getFullYear();
     const histo = C.historique || { annee: anneeCourante, mois: [], partenaires: {} };
     // Mettre à jour l'année automatiquement si elle est différente
@@ -338,10 +346,13 @@
       h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('div', {}, h('h3', {}, 'Partenaire prioritaire'), h('p', {}, 'Mis en avant partout (tableaux, cartes, objectifs, plan de motivation). Paramètres communs à tous les mois.'))),
         h('div', { class: 'form-grid' }, h('div', { class: 'field' }, h('label', { for: 'pp' }, 'Partenaire prioritaire'), h('input', { class: 'input', id: 'pp', value: C.prioritaire, onchange: (e) => { C.prioritaire = e.target.value.trim().toUpperCase() || 'RGZ'; enregistrer(); } })),
           h('div', { class: 'field' }, h('label', { for: 'pd' }, 'Partenaire par défaut (logins non reconnus)'), h('input', { class: 'input', id: 'pd', value: C.defaut, onchange: (e) => { C.defaut = e.target.value.trim().toUpperCase() || 'AUTRES'; enregistrer(); } })))),
-      tableSimple('Logins → partenaire', 'Le partenaire est lu dans le login (pvt_<jeton>_nom). Associez chaque jeton au nom du partenaire. Jeton non listé : le jeton en majuscules.', alias,
-        [{ t: 'Jeton du login', ph: 'ex. rgz', get: (x) => x.k, set: (x, v) => { x.k = v; sync(); } }, { t: 'Partenaire', ph: 'ex. RGZ', get: (x) => x.v, set: (x, v) => { x.v = v; sync(); } }],
-        ([k, v]) => { const d = alias.find((a) => a.k.toLowerCase() === k.toLowerCase()); if (d) return 'Le jeton « ' + k + ' » est déjà associé à ' + d.v + '.'; alias.push({ k, v }); sync(); }, (i) => { alias.splice(i, 1); sync(); }),
-      tableSimple('Agences → partenaire', 'Pour les logins sans nom de partenaire : le motif (expression régulière, insensible à la casse) est testé sur l\'AGENCE, dans l\'ordre.', C.regles_agence,
+      tableSimple('Remplacements de login → partenaire', 'Si le LOGIN_VENDEUR contient le motif (casse ignorée), la vente va au partenaire. Testés dans l\'ordre du tableau, après la liste nominative : le premier motif trouvé l\'emporte. Login reconnu par aucune ligne : agence (ci-dessous), sinon partenaire par défaut.', C.remplacements_login,
+        [{ t: 'Le login contient', ph: 'ex. rgz', get: (x) => x.motif, set: (x, v) => { x.motif = v.trim().toLowerCase(); }, valide: (v) => !!String(v).trim() }, { t: 'Partenaire', ph: 'ex. RGZ', get: (x) => x.partenaire, set: (x, v) => { x.partenaire = v.trim().toUpperCase(); }, valide: (v) => !!String(v).trim() }],
+        ([m, p]) => { const motif = String(m).trim().toLowerCase(); const d = C.remplacements_login.find((r) => r.motif === motif); if (d) return 'Le motif « ' + motif + ' » est déjà associé à ' + d.partenaire + '.'; C.remplacements_login.push({ motif, partenaire: String(p).trim().toUpperCase() }); }, (i) => C.remplacements_login.splice(i, 1)),
+      tableSimple('Logins sans préfixe → partenaire', 'Liste nominative (ex. vendeurs POP&SHOP), testée en premier. Casse, « - »/« _ » et « .ftth » final ignorés. Les nouveaux vendeurs non listés d\'une agence POP / Celtiis Shop sont signalés à l\'import.', nominatif,
+        [{ t: 'Login', ph: 'ex. cgaba', get: (x) => x.l, set: (x, v) => { x.l = v.trim(); syncNominatif(); } }, { t: 'Partenaire', ph: 'ex. POP&SHOP', get: (x) => x.p, set: (x, v) => { x.p = v; syncNominatif(); } }],
+        ([l, p]) => { const d = nominatif.find((x) => CT.cleLogin(x.l) === CT.cleLogin(l)); if (d) return 'Le login « ' + l + ' » est déjà associé à ' + d.p + '.'; nominatif.push({ l: String(l).trim(), p }); syncNominatif(); }, (i) => { nominatif.splice(i, 1); syncNominatif(); }),
+      tableSimple('Agences → partenaire', 'Seulement pour les logins reconnus ni par la liste nominative ni par les remplacements : le motif (expression régulière, insensible à la casse) est testé sur l\'AGENCE, dans l\'ordre.', C.regles_agence,
         [{ t: 'Motif (regex)', ph: 'ex. cotonou|akpakpa', get: (x) => x.motif, set: (x, v) => { x.motif = v; }, valide: (v) => { try { new RegExp(v); return true; } catch (e) { return false; } } }, { t: 'Partenaire', ph: 'ex. RGZ', get: (x) => x.partenaire, set: (x, v) => { x.partenaire = v.toUpperCase(); } }],
         ([motif, p]) => { C.regles_agence.push({ motif, partenaire: p.toUpperCase() }); }, (i) => C.regles_agence.splice(i, 1)),
       tableSimple('Historique mensuel ' + histo.annee + ' (ventes par partenaire)', 'Alimente la colonne « mois précédent », l\'évolution et les graphiques de Performance partenaire. '

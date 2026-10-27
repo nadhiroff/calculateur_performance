@@ -6,7 +6,7 @@
   'use strict';
   const CT = window.CT;
   const { h, $, $$ } = CT;
-  const etat = (CT.etat = { res: null, lignes: [], meta: null, qualite: null, jourRef: null, cle: null, vue: 'dashboard', prioritaire: 'RGZ', motiv: null, motivPJ: null, motivPerf: null, perf: null, filtre: null, kpiFiltre: null, jourDu: null, periodeDu: null, noteDates: '' });
+  const etat = (CT.etat = { res: null, toutes: [], lignes: [], meta: null, qualite: null, jourRef: null, cle: null, vue: 'dashboard', prioritaire: 'RGZ', motiv: null, motivPJ: null, motivPerf: null, perf: null, filtre: null, kpiFiltre: null, jourDu: null, periodeDu: null, noteDates: '' });
   let fichierChoisi = null, analyseEnCours = false, appliquerDates = async () => {};
   const VUES = { dashboard: { id: 'view-dashboard', titre: 'Tableau de bord' }, rgz: { id: 'view-rgz', titre: 'Tableau de bord RGZ' }, pointjour: { id: 'view-pointjour', titre: 'Point du jour' }, perf: { id: 'view-perf', titre: 'Performance partenaires' } };
   const HASH = { '#dashboard': 'dashboard', '#rgz': 'rgz', '#point-du-jour': 'pointjour', '#performance': 'perf' };
@@ -80,7 +80,8 @@
     etat.prioritaire = cfg.prioritaire || 'RGZ';
     etat.cle = etat.jourRef.slice(0, 7);
     const P = CT.store.actifs(etat.cle);
-    if (!sansClasser) CT.parser.classer(etat.lignes, P.regles, cfg);
+    // Toutes les lignes sont classées ; seules celles des offres comptées entrent dans les calculs (etat.lignes)
+    if (!sansClasser) { CT.parser.classer(etat.toutes, P.regles, cfg); etat.lignes = CT.parser.retenues(etat.toutes); }
     const base = { cle: etat.cle, jourRef: etat.jourRef, prioritaire: etat.prioritaire }, du = etat.jourDu, duPerf = etat.periodeDu;
     // Tableau de bord : toujours « mois à date » + journée de référence
     etat.motiv = CT.calc.motivation(etat.lignes, base);
@@ -248,7 +249,7 @@
     if (aDonnees && !fichierChoisi) {
       carte = h('section', { class: 'card flat', 'aria-label': 'Fichier importé' },
         h('div', { class: 'file-chip' },
-          h('div', {}, h('div', { class: 'kpi-label' }, 'Fichier analysé'), h('strong', {}, etat.meta.nom), h('div', { class: 'kpi-sub' }, (etat.meta.taille ? CT.fmt.octets(etat.meta.taille) + ' · ' : '') + CT.fmt.int(etat.lignes.length) + ' lignes · du ' + CT.date.court(etat.qualite.du) + ' au ' + CT.date.court(etat.qualite.au) + ' · Sauvegardé avec succès en base de données MySQL • Zéro stockage local sur le navigateur.')),
+          h('div', {}, h('div', { class: 'kpi-label' }, 'Fichier analysé'), h('strong', {}, etat.meta.nom), h('div', { class: 'kpi-sub' }, (etat.meta.taille ? CT.fmt.octets(etat.meta.taille) + ' · ' : '') + CT.fmt.int(etat.lignes.length) + ' lignes comptées' + (etat.toutes.length > etat.lignes.length ? ' (' + CT.fmt.int(etat.toutes.length - etat.lignes.length) + ' hors offres comptées ignorées)' : '') + ' · du ' + CT.date.court(etat.qualite.du) + ' au ' + CT.date.court(etat.qualite.au) + ' · Sauvegardé avec succès en base de données MySQL • Zéro stockage local sur le navigateur.')),
           h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, btnImport)), prog);
     } else {
       const dz = h('div', { class: 'dropzone', id: 'dropzone' },
@@ -285,7 +286,7 @@
       progres(100, 'Analyse terminée en ' + ((performance.now() - t0) / 1000).toFixed(1) + ' s');
       const choix = await rapportQualite(res, qc);
       if (choix !== 'continuer') { CT.toast('Import annulé.', 'info', 3000); progres(0, ''); return; }
-      etat.res = res; etat.lignes = res.lignes; etat.meta = res.meta; etat.qualite = qc; etat.jourRef = qc.au; etat.charge = { du: qc.du, au: qc.au };
+      etat.res = res; etat.toutes = res.lignes; etat.lignes = CT.parser.retenues(res.lignes); etat.meta = res.meta; etat.qualite = qc; etat.jourRef = qc.au; etat.charge = { du: qc.du, au: qc.au };
       const fichierEnvoye = fichierChoisi; fichierChoisi = null;
       viderFiltresDates();
       classerEtCalculer(); rendreTout();
@@ -293,7 +294,7 @@
       if (!(await sauvegarderDonnees(fichierEnvoye))) return;   // échec : alerte affichée, écran remis sur les données de la base
       if (datesParDefaut()) await appliquerDates();               // le fichier qui vient d'être importé devient la période affichée
       else { classerEtCalculer(); rendreTout(); }
-      CT.toast(CT.fmt.int(res.lignes.length) + ' lignes calculées et enregistrées en ' + ((performance.now() - t0) / 1000).toFixed(1) + ' s.', 'ok');
+      CT.toast(CT.fmt.int(etat.lignes.length) + ' lignes calculées (' + CT.fmt.int(res.lignes.length) + ' enregistrées) en ' + ((performance.now() - t0) / 1000).toFixed(1) + ' s.', 'ok');
       location.hash = '#dashboard'; vue('dashboard');
     } catch (err) { console.error(err); CT.toast(err.message || 'Analyse impossible.', 'err', 9000); progres(0, ''); }
     finally { analyseEnCours = false; const b = $('#btn-analyser'); b && (b.disabled = false); }
@@ -355,7 +356,7 @@
       progres(0, '');
       // Rien n'a été écrit (transaction annulée côté serveur) : on n'affiche pas un calcul qui n'existe pas en base
       CT.dashboard.synthese();   // l'échec apparaît dans le journal des imports
-      if (!(await chargerDonnees())) { etat.res = null; etat.lignes = []; etat.meta = null; etat.qualite = null; etat.jourRef = null; }
+      if (!(await chargerDonnees())) { etat.res = null; etat.toutes = []; etat.lignes = []; etat.meta = null; etat.qualite = null; etat.jourRef = null; }
       if (etat.res) classerEtCalculer();
       rendreTout();
       CT.modal({ titre: 'Import non enregistré', actions: [{ label: 'Compris', valeur: true, variante: 'primary' }],
@@ -385,7 +386,7 @@
       const au = jours[jours.length - 1]; if (!au) return false;
       const cfg = CT.store.get().partenaires, P = CT.store.actifs(au.slice(0, 7));
       CT.parser.classer(res.lignes, P.regles, cfg);
-      etat.res = res; etat.lignes = res.lignes; etat.meta = res.meta; etat.qualite = CT.parser.controleQualite(res, P.regles);
+      etat.res = res; etat.toutes = res.lignes; etat.lignes = CT.parser.retenues(res.lignes); etat.meta = res.meta; etat.qualite = CT.parser.controleQualite(res, P.regles);
       etat.jourRef = etat.qualite.au; etat.jourDu = null; etat.charge = { du: pl.du, au: pl.au };
       return true;
     } catch (e) {

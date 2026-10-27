@@ -126,7 +126,7 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
   <div id="toasts" aria-live="polite"></div>
 
   <!-- Bibliothèques (CDN, versions figées). Défauts embarqués puis modules de l'application -->
-  <script src="config/defaults.js?v=20261021-15" defer></script>
+  <script src="config/defaults.js?v=20261027-offres" defer></script>
   <!-- SheetJS avec styles (en-têtes Excel en gras sur fond gris) ; repli automatique sur SheetJS standard si indisponible -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js" defer crossorigin="anonymous"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer crossorigin="anonymous"></script>
@@ -135,10 +135,10 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
   <script src="assets/js/utils.js?v=20261022-3" defer></script>
   <script src="assets/js/table.js?v=20261021-15" defer></script>
   <script src="assets/js/api.js?v=20261022-2" defer></script>
-  <script src="assets/js/store.js?v=20261023-h1" defer></script>
-  <script src="assets/js/regles.js?v=20261021-15" defer></script>
+  <script src="assets/js/store.js?v=20261027-offres" defer></script>
+  <script src="assets/js/regles.js?v=20261027-offres" defer></script>
   <script src="assets/js/objectifs.js?v=20261021-15" defer></script>
-  <script src="assets/js/parser.js?v=20261021-15" defer></script>
+  <script src="assets/js/parser.js?v=20261027-offres" defer></script>
   <script src="assets/js/calculs.js?v=20261022-m3" defer></script>
   <script src="assets/js/ui.js?v=20261022-e1" defer></script>
   <script src="assets/js/dashboard.js?v=20261023-v2" defer></script>
@@ -147,6 +147,6 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
   <script src="assets/js/perf_partenaire.js?v=20261022-m2" defer></script>
   <script src="assets/js/export.js?v=20261021-15" defer></script>
   <script src="assets/js/partage.js?v=20261023-m1" defer></script>
-  <script src="assets/js/app.js?v=20261023-h1" defer></script>
+  <script src="assets/js/app.js?v=20261027-offres" defer></script>
 </body>
 </html>

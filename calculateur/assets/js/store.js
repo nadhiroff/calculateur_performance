@@ -54,41 +54,30 @@
     return migre;
   }
 
+  /* Règles partenaires, format 2 (cahier des charges) : liste nominative POP&SHOP, puis remplacements « le login contient… »,
+     puis agences POP / Celtiis Shop. Une configuration plus ancienne (jetons pvt_<jeton>_, motifs d'agence par partenaire)
+     est remplacée UNE seule fois par les valeurs par défaut ; ensuite, plus rien n'est réinjecté : les modifications faites
+     dans Paramètres sont conservées. Même repli côté serveur : HistoriqueVentes::configuration(). */
+  const VERSION_REGLES = 2;
   function migrerPartenaires(stored, defaut) {
-    let migre = false;
-    const storedPart = stored.partenaires;
-    const defautPart = defaut.partenaires;
-
-    // Fusionner les alias_login : ajouter les nouveaux, garder les existants
-    Object.keys(defautPart.alias_login || {}).forEach((key) => {
-      if (!storedPart.alias_login[key]) {
-        storedPart.alias_login[key] = defautPart.alias_login[key];
-        migre = true;
-      }
-    });
-
-    // Fusionner les règles d'agence : ajouter les nouvelles
-    const defautRegles = defautPart.regles_agence || [];
-    const storedRegles = storedPart.regles_agence || [];
-    defautRegles.forEach((nouvelle) => {
-      const existe = storedRegles.some((r) => r.motif === nouvelle.motif && r.partenaire === nouvelle.partenaire);
-      if (!existe) {
-        storedRegles.push(nouvelle);
-        migre = true;
-      }
-    });
-
-    // Mettre à jour partenaire prioritaire et défaut si non modifiés par l'utilisateur
-    // (on garde les valeurs de l'utilisateur s'il les a changées)
-
-    return migre;
+    const sp = stored.partenaires = stored.partenaires || {}, dp = defaut.partenaires;
+    if ((sp.version_regles || 0) >= VERSION_REGLES) return false;
+    sp.remplacements_login = CT.clone(dp.remplacements_login || []);
+    sp.regles_agence = CT.clone(dp.regles_agence || []);
+    if (!sp.logins_partenaire) sp.logins_partenaire = CT.clone(dp.logins_partenaire || {});
+    delete sp.alias_login; delete sp.regles_agence_vues;
+    sp.prioritaire = sp.prioritaire || dp.prioritaire; sp.defaut = sp.defaut || dp.defaut;
+    sp.version_regles = VERSION_REGLES;
+    return true;
   }
 
+  /* Offres comptées : ajoutées aux règles des mois qui n'en ont pas encore (une fois ; liste vide = toutes les offres) */
   function migrerPeriodes(stored, defaut) {
     let migre = false;
-    // Pour l'instant, on ne migre pas les périodes automatiquement
-    // car les objectifs et règles sont spécifiques à chaque mois
-    // Si besoin, on peut ajouter une logique ici pour fusionner des champs
+    const offres = defaut.periodes[Object.keys(defaut.periodes)[0]].regles.offres_comptees || [];
+    Object.values(stored.periodes || {}).forEach((p) => {
+      if (p && p.regles && !Array.isArray(p.regles.offres_comptees)) { p.regles.offres_comptees = offres.slice(); migre = true; }
+    });
     return migre;
   }
 
@@ -185,7 +174,7 @@
     async recharger() {
       const r = await CT.api.parametres.lire();
       versionServeur = r.version;
-      if (!r.vide) { etat = r.etat; notifier('serveur'); }
+      if (!r.vide) { etat = r.etat; migrerTout(etat, defauts()); notifier('serveur'); }
     },
     /* Historique mensuel recalculé par le serveur à partir des ventes en base (après un import, au retour sur la page) :
        remplacé seul, sans recalcul ni notification ; ignoré si une modification locale attend d'être envoyée. true si changé */
@@ -211,9 +200,10 @@
         if (!p.regles || !p.regles.agent || !p.regles.superviseur) err.push(k + ' : regles.agent / regles.superviseur manquants.');
         if (p.objectifs && !(p.objectifs.calendrier && Array.isArray(p.objectifs.calendrier.ouvres))) err.push(k + ' : calendrier.ouvres manquant.');
       }
-      if (!j.partenaires || !j.partenaires.alias_login) err.push('« partenaires.alias_login » manquant.');
+      if (!j.partenaires || typeof j.partenaires !== 'object') err.push('« partenaires » manquant.');
       if (err.length) return { ok: false, erreurs: err };
       j.version = 1; delete j.expire;
+      migrerTout(j, defauts());   // ancien export (format de règles précédent) : mis au format actuel
       etat = j; S.sauver('import');
       return { ok: true, erreurs: [] };
     },
@@ -225,6 +215,6 @@
   document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState !== 'visible' || Date.now() - verifEn < 5000 || minuteur) return;
     verifEn = Date.now();
-    try { const r = await CT.api.parametres.lire(); if (r.version !== versionServeur && !r.vide) { versionServeur = r.version; etat = r.etat; notifier('serveur'); } } catch (e) { /* hors ligne : on garde l'état courant */ }
+    try { const r = await CT.api.parametres.lire(); if (r.version !== versionServeur && !r.vide) { versionServeur = r.version; etat = r.etat; if (migrerTout(etat, defauts()).length) envoyer(); notifier('serveur'); } } catch (e) { /* hors ligne : on garde l'état courant */ }
   });
 })();
