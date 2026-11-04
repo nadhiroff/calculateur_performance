@@ -6,6 +6,15 @@
   'use strict';
   const CT = (window.CT = window.CT || {});
 
+  /* Mémoire de la page (choix de dates, onglet, menus ouverts…) : gardée en mémoire JavaScript uniquement.
+     Rien n'est écrit dans le navigateur (ni localStorage, ni sessionStorage, ni IndexedDB) : tout s'efface en fermant ou rechargeant la page. */
+  const memo = new Map();
+  CT.memoire = {
+    getItem: (k) => (memo.has(k) ? memo.get(k) : null),
+    setItem: (k, v) => { memo.set(k, String(v)); },
+    removeItem: (k) => { memo.delete(k); },
+  };
+
   /* ---------- Formats numériques (locale fr-FR) ---------- */
   const nfInt = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
   const nfDec = (d) => new Intl.NumberFormat('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -145,16 +154,19 @@
 
   /* Session administrateur : déconnexion après N minutes SANS activité (N = data-inactivite, 30 par défaut).
      Tant que l'administrateur bouge la souris, tape ou fait défiler, la session est prolongée côté serveur (GET /session,
-     au plus toutes les 90 s), même si la page ne recharge aucune donnée. Activité partagée entre les onglets (localStorage).
+     au plus toutes les 90 s), même si la page ne recharge aucune donnée. Activité partagée entre les onglets par message direct (BroadcastChannel), sans stockage.
      Avertissement une minute avant ; à l'échéance, retour à la page de connexion. */
   document.addEventListener('DOMContentLoaded', () => {
     const zone = document.querySelector('.nav-user[data-inactivite]'); if (!zone) return;
     const limite = (+zone.dataset.inactivite || 30) * 60000, CLE = 'ct_activite_admin';
     let derniere = Date.now(), dernierPing = Date.now(), averti = false;
-    const partagee = () => { try { return Math.max(derniere, +localStorage.getItem(CLE) || 0); } catch (e) { return derniere; } };
+    // Activité des autres onglets reçue par message direct (BroadcastChannel) : rien n'est enregistré dans le navigateur
+    let autres = 0; const canal = (() => { try { return new BroadcastChannel(CLE); } catch (e) { return null; } })();
+    if (canal) canal.onmessage = (m) => { autres = Math.max(autres, +m.data || 0); averti = false; };
+    const partagee = () => Math.max(derniere, autres);
     const actif = () => {
       derniere = Date.now(); averti = false;
-      try { localStorage.setItem(CLE, String(derniere)); } catch (e) { /* stockage indisponible : onglet seul */ }
+      if (canal) { try { canal.postMessage(derniere); } catch (e) { /* onglet seul */ } }
       if (derniere - dernierPing > 90000 && CT.api) { dernierPing = derniere; CT.api.requete('/session').catch(() => {}); }   // 401 → page de connexion (api.js)
     };
     ['pointerdown', 'keydown', 'wheel', 'touchstart', 'scroll'].forEach((ev) => window.addEventListener(ev, actif, { passive: true, capture: true }));
@@ -226,17 +238,17 @@
   CT.somme = (a, f) => a.reduce((s, x) => s + (f ? f(x) : x), 0);
 
   /* Menu latéral (#nav) : garde sa position de défilement d'une page à l'autre (index.php ↔ parametres.php),
-     puis s'assure que l'entrée active reste visible. Mémorisé pour l'onglet du navigateur seulement (sessionStorage). */
+     puis s'assure que l'entrée active reste visible. Mémorisé en mémoire de la page seulement (rien dans le navigateur). */
   (() => {
     const CLE = 'ct_nav_scroll';
     const restaurer = () => {
       const n = document.getElementById('nav'); if (!n) return;
-      try { const v = +sessionStorage.getItem(CLE); if (v) n.scrollTop = v; } catch (e) { /* stockage indisponible */ }
+      try { const v = +CT.memoire.getItem(CLE); if (v) n.scrollTop = v; } catch (e) { /* stockage indisponible */ }
       const actif = n.querySelector('[aria-current="page"]');
       if (actif) { const a = actif.getBoundingClientRect(), b = n.getBoundingClientRect(); if (a.top < b.top || a.bottom > b.bottom) actif.scrollIntoView({ block: 'nearest' }); }
     };
     // Groupes du menu (Facturation, Point du jour, Paramètres…) : ouverts / fermés comme on les a laissés, d'une page à l'autre
-    const CLE_G = 'ct_nav_groupes', lireG = () => { try { return JSON.parse(sessionStorage.getItem(CLE_G) || '{}'); } catch (e) { return {}; } };
+    const CLE_G = 'ct_nav_groupes', lireG = () => { try { return JSON.parse(CT.memoire.getItem(CLE_G) || '{}'); } catch (e) { return {}; } };
     document.addEventListener('DOMContentLoaded', () => {
       const n = document.getElementById('nav'); if (!n) return;
       const g0 = lireG();
@@ -244,10 +256,10 @@
         const k = d.dataset.groupe;
         const pageDuGroupe = d.querySelector('[aria-current="page"]') || (k === 'parametres' && /parametres\.php$/.test(location.pathname));
         if (k in g0 && !pageDuGroupe) d.open = g0[k];   // le groupe de la page affichée reste ouvert
-        d.addEventListener('toggle', () => { const g = lireG(); g[k] = d.open; try { sessionStorage.setItem(CLE_G, JSON.stringify(g)); } catch (e) { /* stockage indisponible */ } });
+        d.addEventListener('toggle', () => { const g = lireG(); g[k] = d.open; try { CT.memoire.setItem(CLE_G, JSON.stringify(g)); } catch (e) { /* stockage indisponible */ } });
       });
       restaurer();
-      n.addEventListener('scroll', () => { try { sessionStorage.setItem(CLE, String(n.scrollTop)); } catch (e) { /* stockage indisponible */ } }, { passive: true });
+      n.addEventListener('scroll', () => { try { CT.memoire.setItem(CLE, String(n.scrollTop)); } catch (e) { /* stockage indisponible */ } }, { passive: true });
     });
     window.addEventListener('load', () => setTimeout(restaurer, 50));   // après l'ouverture des groupes du menu actif
   })();

@@ -6,8 +6,8 @@
 (function () {
   'use strict';
   const CT = window.CT;
-  const lire = (cle) => { try { return sessionStorage.getItem('ct_onglet_' + cle); } catch (_) { return null; } };
-  const ecrire = (cle, v) => { try { sessionStorage.setItem('ct_onglet_' + cle, v); } catch (_) { /* stockage indisponible */ } };
+  const lire = (cle) => { try { return CT.memoire.getItem('ct_onglet_' + cle); } catch (_) { return null; } };
+  const ecrire = (cle, v) => { try { CT.memoire.setItem('ct_onglet_' + cle, v); } catch (_) { /* stockage indisponible */ } };
   const tonDe = (p) => (p == null ? '' : p >= 1 ? 'pos' : p >= 0.6 ? 'info' : p >= 0.35 ? 'warn' : 'neg');
 
   CT.ui = {

@@ -110,7 +110,7 @@
     const e = E(), f = lireFiltres(), pr = f.partenaire || e.prioritaire, dP = CT.periode.perfDu();
     const jr = CT.periode.jour(f), sem = CT.periode.semaine(f), obj = CT.periode.objectif(f), mo = CT.periode.mois(f);
     const cible = (b) => (b.objectif == null ? '—' : CT.fmt.nat(b.objectif));
-    const ligne = (titre, b, note) => `<div class="obj-row"><div class="top"><span>${titre}</span><b class="num">${b.objectif === 0 ? 'Pas d\'objectif' : CT.fmt.pct(b.taux)}</b></div>${barre(b.real, b.objectif || 0)}<div class="mini-cap">${b.objectif === 0 ? CT.fmt.int(b.real) + ' vente' + (b.real > 1 ? 's' : '') + ' — ' + note + ' · aucun jour ouvré' : CT.fmt.int(b.real) + ' / ' + cible(b) + ' — ' + note}</div></div>`;
+    const ligne = (titre, b, note) => `<div class="obj-row"><div class="top"><span>${titre}</span><b class="num">${b.objectif === 0 ? 'Pas d\'objectif' : CT.fmt.pct(b.taux)}</b></div>${barre(b.real, b.objectif || 0)}<div class="mini-cap">${b.objectif === 0 ? CT.fmt.int(b.real) + ' vente' + (b.real > 1 ? 's' : '') + ' — ' + note + ' · objectif non renseigné' : CT.fmt.int(b.real) + ' / ' + cible(b) + ' — ' + note}</div></div>`;
     const statuts = f.statut || (e.motiv.regles.statuts_comptes || ['OK']).join(', ');
     document.getElementById('t-obj').textContent = 'Objectifs ' + pr;
     document.getElementById('obj-sub').textContent = 'Ventes ' + statuts + ' ' + pr + ' du ' + CT.date.court(dP) + ' au ' + CT.date.court(e.jourRef)
@@ -149,7 +149,7 @@
       kpi('fa-circle-check', 'info', 'Taux de réussite', CT.fmt.pct(k.taux, 1), 'STATUS = OK / total') +
       kpi('fa-hourglass-half', 'warn', 'En attente (VALIDE)', CT.fmt.int(k.valide), CT.fmt.pct(k.total ? k.valide / k.total : 0, 1) + ' du total, non comptées') +
       kpi('fa-basket-shopping', '', 'Panier moyen', CT.fmt.fcfa(k.panier), 'CA ÷ souscriptions') +
-      kpi('fa-bullseye', obj.taux != null && obj.taux >= 1 ? 'pos' : 'warn', 'Objectif ' + (filtres.partenaire || e.prioritaire) + ' — période', obj.objectif === 0 ? 'Pas d\'objectif' : obj.taux == null ? '—' : CT.fmt.pct(obj.taux, 1), CT.fmt.int(obj.real) + (obj.objectif === 0 ? ' ventes · aucun jour ouvré sur la période' : ' / ' + (obj.objectif == null ? '—' : CT.fmt.nat(obj.objectif)) + ' ventes ' + (filtres.statut || 'OK')));
+      kpi('fa-bullseye', obj.taux != null && obj.taux >= 1 ? 'pos' : 'warn', 'Objectif ' + (filtres.partenaire || e.prioritaire) + ' — période', obj.objectif === 0 ? 'Pas d\'objectif' : obj.taux == null ? '—' : CT.fmt.pct(obj.taux, 1), CT.fmt.int(obj.real) + (obj.objectif === 0 ? ' ventes · objectif non renseigné dans Paramètres' : ' / ' + (obj.objectif == null ? '—' : CT.fmt.nat(obj.objectif)) + ' ventes ' + (filtres.statut || 'OK')));
     // Graphiques
     // Vue Jour / Semaine / Mois (barre de l'en-tête) : regroupement des comptes journaliers
     const q = CT.analyseCalc.regrouper(CT.calc.quotidien(L), CT.etat.gran || 'jour'), PAL = palette(), surface = jeton('--surface');
@@ -221,7 +221,7 @@
         <section class="card card-remplie"><div class="card-head"><div><h3>Volume par mois</h3><p>Souscriptions enregistrées et ventes validées (OK)${s.par_mois.length > 12 ? ' · 12 derniers mois de la période' : ''}</p></div></div><div class="chart-box"><canvas id="ch-mois" role="img" aria-label="Souscriptions par mois"></canvas></div></section>
         <section class="card"><div class="card-head"><div><h3>Derniers imports</h3><p>Journal des fichiers traités${im.derniers.length > 6 ? ' · ' + im.derniers.length + ' derniers, faites défiler' : ''}</p></div></div>
           <ul class="activity">${im.derniers.map((i) => { const [ic, cls, txt] = lib[i.statut] || lib.en_cours;
-            const det = i.statut === 'ok' && i.nouvelles != null ? n(i.nouvelles) + ' nouvelle(s) · ' + n(i.modifiees || 0) + ' modifiée(s)' + (i.feuilles ? ' · ' + i.feuilles + ' feuille(s)' : '') : i.type === 'objectifs' ? 'Objectifs mensuels' : (i.erreur || '');
+            const det = i.type === 'factures' ? 'Facture ' + (i.mois ? CT.date.libelleMois(i.mois) : '') + (i.statut === 'ok' && i.facturees != null ? ' · ' + n(i.facturees) + ' vente(s) facturée(s)' : i.erreur ? ' · ' + i.erreur : '') : i.statut === 'ok' && i.nouvelles != null ? n(i.nouvelles) + ' nouvelle(s) · ' + n(i.modifiees || 0) + ' modifiée(s)' + (i.feuilles ? ' · ' + i.feuilles + ' feuille(s)' : '') : i.type === 'objectifs' ? 'Objectifs mensuels' : (i.erreur || '');
             return `<li><span class="ic ${cls}" aria-hidden="true"><i class="fa-solid ${ic}"></i></span><div><div class="nm" title="${CT.esc(i.nom)}">${CT.esc(i.nom)}</div><small title="${CT.esc(det)}">${CT.esc(det)}</small></div><div style="text-align:right"><span class="badge ${cls === 'neg' ? 'badge-neg' : cls ? 'badge-info' : 'badge-pos'}">${txt}</span><small>${i.date ? depuis(i.date) : ''}</small></div></li>`; }).join('') || '<li class="muted">Aucun import.</li>'}</ul></section>
       </div>`;
     zone.hidden = false;

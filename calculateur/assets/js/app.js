@@ -6,7 +6,7 @@
   'use strict';
   const CT = window.CT;
   const { h, $, $$ } = CT;
-  const etat = (CT.etat = { gran: (() => { try { return sessionStorage.getItem('ct_vue') || 'jour'; } catch (e) { return 'jour'; } })(), res: null, toutes: [], lignes: [], meta: null, qualite: null, jourRef: null, cle: null, vue: 'dashboard', prioritaire: 'RGZ', motiv: null, motivPJ: null, motivPerf: null, perf: null, filtre: null, kpiFiltre: null, jourDu: null, periodeDu: null, noteDates: '' });
+  const etat = (CT.etat = { gran: (() => { try { return CT.memoire.getItem('ct_vue') || 'jour'; } catch (e) { return 'jour'; } })(), res: null, toutes: [], lignes: [], meta: null, qualite: null, jourRef: null, cle: null, vue: 'dashboard', prioritaire: 'RGZ', motiv: null, motivPJ: null, motivPerf: null, perf: null, filtre: null, kpiFiltre: null, jourDu: null, periodeDu: null, noteDates: '' });
   let fichierChoisi = null, analyseEnCours = false, appliquerDates = async () => {};
   const VUES = { dashboard: { id: 'view-dashboard', titre: 'Tableau de bord' }, rgz: { id: 'view-rgz', titre: 'Tableau de bord RGZ' }, pointjour: { id: 'view-pointjour', titre: 'Point du jour' }, perf: { id: 'view-perf', titre: 'Performance partenaires' } };
   const HASH = { '#dashboard': 'dashboard', '#rgz': 'rgz', '#point-du-jour': 'pointjour', '#performance': 'perf' };
@@ -96,7 +96,7 @@
   const SOUS_HASH = { pointjour: '#point-du-jour', perf: '#performance' };
   function surbrillanceSous() {
     const [h, sous] = location.hash.split('/'), nom = HASH[h] || (location.hash ? null : 'dashboard'), premier = nom && $('#nav details[data-groupe="' + nom + '"] a[data-sous]');
-    const ong = sous || (nom && SOUS_HASH[nom] && (() => { try { return sessionStorage.getItem('ct_onglet_' + nom); } catch (e) { return null; } })()) || (premier ? premier.dataset.sous.split('/')[1] : null);
+    const ong = sous || (nom && SOUS_HASH[nom] && (() => { try { return CT.memoire.getItem('ct_onglet_' + nom); } catch (e) { return null; } })()) || (premier ? premier.dataset.sous.split('/')[1] : null);
     $$('#nav a[data-sous]').forEach((a) => { if (nom && ong && a.dataset.sous === nom + '/' + ong) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
     $$('#nav details[data-groupe]').forEach((d) => { if (d.dataset.groupe === nom) d.open = true; });
     // Fil d'Ariane et titre de l'onglet : page › rubrique ouverte
@@ -111,7 +111,7 @@
   }
   function routeHash() {
     const [h, sous] = location.hash.split('/'), nom = HASH[h] || 'dashboard';
-    if (sous && SOUS_HASH[nom]) { try { sessionStorage.setItem('ct_onglet_' + nom, sous); } catch (e) { /* stockage indisponible */ } }
+    if (sous && SOUS_HASH[nom]) { try { CT.memoire.setItem('ct_onglet_' + nom, sous); } catch (e) { /* stockage indisponible */ } }
     vue(nom);
     if (sous && SOUS_HASH[nom]) { const b = document.getElementById('tab-' + nom + '-' + sous); if (b && b.getAttribute('aria-selected') !== 'true') b.click(); }
     else if (sous && CT.analyseUI) CT.analyseUI.allerA(sous === 'apercu' ? 'view-' + nom : 'sec-' + nom + '-' + sous);
@@ -251,7 +251,10 @@
       if (part !== etat.prioritaire) return { du, au, real, objectif: null, taux: null };
       // Comme calculerPlusieursMois : un mois sans aucune vente en base (hors le dernier) ne crée pas de faux retard
       const tr = CT.calc.tranches(du, auObj || au).filter((t, i, all) => i === all.length - 1 || etat.lignes.some((l) => l.jour && l.jour >= t.du && l.jour <= t.au));
-      const objectif = CT.somme(tr, (t) => CT.objectifs.objectifPeriode(CT.store.actifs(t.cle).objectifs, t.cle, t.du, t.au));
+      let objectif = CT.somme(tr, (t) => CT.objectifs.objectifPeriode(CT.store.actifs(t.cle).objectifs, t.cle, t.du, t.au));
+      // Période sans aucun jour ouvré (ex. un dimanche seul) : objectif du jour de Paramètres (décision du 04/11/2026)
+      const ouvres = CT.somme(tr, (t) => CT.objectifs.ouvresEntre(CT.store.actifs(t.cle).objectifs, t.cle, t.du, t.au));
+      if (!ouvres) { const cleAu = (auObj || au).slice(0, 7); objectif = CT.objectifs.totaux(CT.store.actifs(cleAu).objectifs).jour; }
       return { du, au, real, objectif, taux: objectif > 0 ? real / objectif : null };
     },
     /* Objectif (jour / semaine / mois) de Paramètres, remplacé dans un bilan ; null reste null (partenaire sans objectif) */
@@ -260,13 +263,11 @@
     /* Journée de référence (date de fin) : objectif du jour de Paramètres */
     jour: (f) => CT.periode.avecObjectif(CT.periode.bilan(etat.jourRef, etat.jourRef, f), CT.periode.totauxParam().jour),
     /* Semaine : du lundi (ou de la date de début si elle est plus tardive) à la date de fin.
-       Objectif : celui de la semaine (Paramètres) si tous ses jours ouvrés sont couverts, sinon objectif du jour × jours ouvrés couverts. */
+       Objectif : toujours l'objectif semaine de Paramètres (ligne TOTAL du mois de la date de fin), décision du 04/11/2026. */
     semaine: (f) => {
-      const lundi = CT.date.lundiDe(etat.jourRef), du = CT.periode.perfDu() > lundi ? CT.periode.perfDu() : lundi, obj = CT.store.actifs(etat.cle).objectifs;
-      let b = CT.periode.bilan(du, etat.jourRef, f);
-      const couverts = CT.objectifs.ouvresEntre(obj, etat.cle, du, etat.jourRef), entiere = du === lundi && couverts > 0 && couverts === CT.objectifs.ouvresEntre(obj, etat.cle, lundi, CT.date.ajouter(lundi, 6));
-      if (entiere) b = CT.periode.avecObjectif(b, CT.periode.totauxParam().semaine);
-      return { du, ventes: b.real, real: b.real, objectif: b.objectif, taux: b.taux, entiere };
+      const lundi = CT.date.lundiDe(etat.jourRef), du = CT.periode.perfDu() > lundi ? CT.periode.perfDu() : lundi;
+      const b = CT.periode.avecObjectif(CT.periode.bilan(du, etat.jourRef, f), CT.periode.totauxParam().semaine);
+      return { du, ventes: b.real, real: b.real, objectif: b.objectif, taux: b.taux, entiere: du === lundi };
     },
     /* Période [début → fin] : objectif du jour × jours ouvrés de la période */
     objectif: (f) => CT.periode.bilan(CT.periode.perfDu(), etat.jourRef, f),
@@ -573,12 +574,12 @@
       try {
         const d = debutInput ? debutInput.value : '', f = finInput ? finInput.value : '';
         // On mémorise aussi la dernière date en base à cet instant : si de nouvelles données arrivent, la période peut suivre
-        if (d || f) sessionStorage.setItem(CLE_DATES, JSON.stringify({ debut: d, fin: f, baseAu: (etat.bornes || {}).au || '' })); else sessionStorage.removeItem(CLE_DATES);
+        if (d || f) CT.memoire.setItem(CLE_DATES, JSON.stringify({ debut: d, fin: f, baseAu: (etat.bornes || {}).au || '' })); else CT.memoire.removeItem(CLE_DATES);
       } catch (_) { /* stockage indisponible : on ignore */ }
     };
     const restaurerDates = () => {
       try {
-        const s = JSON.parse(sessionStorage.getItem(CLE_DATES) || 'null');
+        const s = JSON.parse(CT.memoire.getItem(CLE_DATES) || 'null');
         if (!s) return false;
         if (debutInput && dateIso(s.debut)) debutInput.value = s.debut;
         if (finInput && dateIso(s.fin)) finInput.value = s.fin;
@@ -622,7 +623,7 @@
       const p = ev.target.closest('[data-periode]'), g = ev.target.closest('[data-vue-gran]');
       if (p && debutInput && finInput) { const [d, f] = p.dataset.periode.split('|'); debutInput.value = d; finInput.value = f; appliquerDates(); }
       else if (g && g.dataset.vueGran !== etat.gran) {
-        etat.gran = g.dataset.vueGran; try { sessionStorage.setItem('ct_vue', etat.gran); } catch (e) { /* stockage indisponible */ }
+        etat.gran = g.dataset.vueGran; try { CT.memoire.setItem('ct_vue', etat.gran); } catch (e) { /* stockage indisponible */ }
         majBarrePeriode(); CT.dashboard.render(); CT.rgz.render(); if (CT.analyseUI) CT.analyseUI.surVue();
       }
     });

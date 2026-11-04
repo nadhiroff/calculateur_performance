@@ -56,7 +56,7 @@ final class Import
     public static function derniers(int $n): array
     {
         return array_map([self::class, 'decoder'], Db::select(
-            "SELECT i.`id`, i.`type`, i.`nom_fichier`, i.`statut`, i.`stats`, i.`erreur`, i.`created_at` FROM `imports` i"
+            "SELECT i.`id`, i.`type`, i.`nom_fichier`, i.`statut`, i.`stats`, i.`erreur`, i.`mois`, i.`created_at` FROM `imports` i"
             ." WHERE NOT (i.`statut` = 'echec' AND EXISTS (SELECT 1 FROM `imports` o WHERE o.`type` = i.`type` AND o.`statut` = 'ok' AND o.`id` > i.`id`))"
             .' ORDER BY i.`id` DESC LIMIT '.max(1, $n)
         ));

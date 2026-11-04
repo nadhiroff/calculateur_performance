@@ -402,15 +402,15 @@
 
   function mettreAJourUrl() {
     if (!EMBARQUE) { const newUrl = new URL(window.location); newUrl.searchParams.set('periode', cle); window.history.replaceState({}, '', newUrl); }
-    // Mémorisation dans le sessionStorage pour éviter la réinitialisation intempestive
-    sessionStorage.setItem('derniere_periode', cle);
+    // Mémorisation en mémoire de la page pour éviter la réinitialisation intempestive
+    CT.memoire.setItem('derniere_periode', cle);
   }
 
   function init() {
-    // Récupérer la période depuis l'URL, ou le sessionStorage, ou utiliser le dernier mois
+    // Récupérer la période depuis l'URL, ou la mémoire de la page, ou utiliser le dernier mois
     const urlParams = new URLSearchParams(window.location.search);
     const periodeUrl = urlParams.get('periode');
-    const periodeSession = sessionStorage.getItem('derniere_periode');
+    const periodeSession = CT.memoire.getItem('derniere_periode');
     const cles = CT.store.cles();
     
     cle = (periodeUrl && cles.includes(periodeUrl)) ? periodeUrl 
@@ -422,7 +422,7 @@
     $('#sel-periode').addEventListener('change', (e) => {
       cle = e.target.value;
       filtre = '';
-      sessionStorage.setItem('derniere_periode', cle);
+      CT.memoire.setItem('derniere_periode', cle);
       mettreAJourUrl();
       rendreTout();
     });

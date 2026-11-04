@@ -160,7 +160,7 @@
       const equipes = obj.equipes.map((e) => {
         const ags = agents.filter((a) => a.equipe === e.id);
         const t = eq.get(e.id);
-        const objB2C = CT.somme(ags, (a) => a.objB2C), objB2B = CT.somme(ags, (a) => a.objB2B), objMois = objB2C + objB2B;
+        const { b2c: objB2C, b2b: objB2B, mois: objMois } = CT.objectifs.equipeMois(e, obj);   // comme la ligne de l'équipe dans Paramètres
         const real = CT.somme(ags, (a) => a.real), realB2C = CT.somme(ags, (a) => a.realB2C), realB2B = CT.somme(ags, (a) => a.realB2B);
         const objJour = CT.objectifs.jourEq(e, obj), objSemaine = CT.objectifs.semEq(e, obj), objPeriode = plafond(objJour, facteur, objMois), ventesJour = CT.somme(ags, (a) => a.ventesJour);
         const avecObj = ags.filter((a) => a.primes).length, actifs = ags.filter((a) => a.primes && a.tro + 1e-9 >= S.activation.seuil_agent).length;

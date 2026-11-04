@@ -329,3 +329,12 @@ html.capture-light table.data thead th, html.capture-light .table-compact thead 
 /* Paramètres : colonnes calculées automatiquement (historique des mois présents en base), en lecture seule */
 table.data th.col-auto { color: var(--primary-600); }
 table.data td.cell-auto { background: var(--surface-2); color: var(--text-2); cursor: default; font-variant-numeric: tabular-nums; }
+
+/* Pages Facturation : barre « Mois facturé » (mêmes boutons que la barre de période) */
+#fact-periode .pb-groupe { border-left: 0; padding-left: 0; }
+#fact-periode .pb-lib { display: inline; font-size: var(--fs-13); font-weight: 600; color: var(--text-3); white-space: nowrap; }
+@media (max-width: 767.98px) {
+  #fact-periode .pb-groupe { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); width: 100%; }
+  #fact-periode #fp-mois { flex: 1 1 auto; min-width: 0; overflow-x: auto; }
+  #fact-periode .pb-select { flex: 1 1 0; max-width: none; }
+}

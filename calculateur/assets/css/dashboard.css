@@ -402,3 +402,8 @@ details.comparatif[open] > summary { margin-bottom: var(--sp-4); }
 .bar-ic { color: var(--text-3); text-align: center; } .bareme li b { white-space: nowrap; }
 
 .badge-gagnant { background: var(--warn-soft); color: var(--warn-text); font-size: var(--fs-11); vertical-align: middle; margin-left: 4px; white-space: nowrap; }
+
+/* Facturation : liens de navigation sans soulignement ; espace entre la carte vide et les liens qui la suivent */
+.lien-nu { text-decoration: none; font-weight: 600; }
+.lien-nu:hover, .lien-nu:focus-visible { text-decoration: none; color: var(--primary-700, var(--primary-600)); }
+.card.empty + p.muted { margin-top: var(--sp-4); }

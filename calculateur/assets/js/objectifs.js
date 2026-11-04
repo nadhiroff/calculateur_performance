@@ -23,6 +23,14 @@
     jourLogin: (l, obj) => (CT.objectifs.modeCalcul(obj) || !(nombre(l && l.jour) > 0) ? CT.objectifs.calcJour(nombre(l.b2c) + nombre(l.b2b), obj) : nombre(l.jour)),
     semLogin: (l, obj) => (CT.objectifs.modeCalcul(obj) || !(nombre(l && l.semaine) > 0) ? CT.objectifs.calcSem(nombre(l.b2c) + nombre(l.b2b)) : nombre(l.semaine)),
     moisEq: (e) => e.logins.reduce((t, l) => t + nombre(l.b2c) + nombre(l.b2b), 0),
+    /* Objectifs B2C / B2B / mois d'une équipe = ceux enregistrés en base, comme la ligne de l'équipe dans Paramètres :
+       totaux du fichier d'objectifs s'ils existent (ex. OMEGA novembre : 60 + 40 = 100 même si ses logins font 95), sinon somme des logins. */
+    equipeMois: (e, obj) => {
+      const ff = !CT.objectifs.modeCalcul(obj) && e.fichier && e.fichier.mois != null ? e.fichier : null;
+      const c = e.logins.reduce((t, l) => t + nombre(l.b2c), 0), b = e.logins.reduce((t, l) => t + nombre(l.b2b), 0);
+      const b2c = ff && ff.b2c != null ? nombre(ff.b2c) : c, b2b = ff && ff.b2b != null ? nombre(ff.b2b) : b;
+      return { b2c, b2b, mois: ff ? nombre(ff.mois) : b2c + b2b };
+    },
     jourEq: (e, obj) => (CT.objectifs.modeCalcul(obj) ? CT.objectifs.calcJour(CT.objectifs.moisEq(e), obj) : (nombre(e.jour) > 0 ? nombre(e.jour) : e.logins.reduce((t, l) => t + CT.objectifs.jourLogin(l, obj), 0))),
     semEq: (e, obj) => (CT.objectifs.modeCalcul(obj) ? CT.objectifs.calcSem(CT.objectifs.moisEq(e)) : (nombre(e.semaine) > 0 ? nombre(e.semaine) : e.logins.reduce((t, l) => t + CT.objectifs.semLogin(l, obj), 0))),
     // Total réseau : somme des équipes (mode fichier) ou calcul sur le total du mois (mode calcul)
@@ -54,9 +62,9 @@
       return m;
     },
     totaux(obj) {
-      let b2c = 0, b2b = 0, jour = 0, semaine = 0;
-      obj.equipes.forEach((e) => { e.logins.forEach((l) => { b2c += nombre(l.b2c); b2b += nombre(l.b2b); }); jour += CT.objectifs.jourEq(e, obj); semaine += CT.objectifs.semEq(e, obj); });
-      return { b2c, b2b, mois: b2c + b2b, jour: CT.objectifs.jourTot(jour, b2c + b2b, obj), semaine: CT.objectifs.semTot(semaine, b2c + b2b, obj) };
+      let b2c = 0, b2b = 0, mois = 0, jour = 0, semaine = 0;
+      obj.equipes.forEach((e) => { const m = CT.objectifs.equipeMois(e, obj); b2c += m.b2c; b2b += m.b2b; mois += m.mois; jour += CT.objectifs.jourEq(e, obj); semaine += CT.objectifs.semEq(e, obj); });
+      return { b2c, b2b, mois, jour: CT.objectifs.jourTot(jour, mois, obj), semaine: CT.objectifs.semTot(semaine, mois, obj) };
     },
 
     /* ---- Import Excel : deux formats reconnus ----

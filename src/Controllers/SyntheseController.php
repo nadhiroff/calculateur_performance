@@ -90,11 +90,13 @@ final class SyntheseController
         $derniers = array_map(static fn (array $i) => [
             'type' => $i['type'],
             'nom' => $i['nom_fichier'],
-            'statut' => $i['statut'],
+            'statut' => $i['statut'] === 'termine' ? 'ok' : $i['statut'],   // « termine » : premiers imports de factures (même sens que « ok »)
             'date' => SouscriptionController::iso8601($i['created_at']),
+            'mois' => $i['mois'] ?? null,
+            'facturees' => $i['stats']['facturees'] ?? null,
             'nouvelles' => $i['stats']['nouvelles'] ?? null,
             'modifiees' => $i['stats']['modifiees'] ?? null,
-            'feuilles' => isset($i['stats']['feuilles']) ? count(array_filter($i['stats']['feuilles'], static fn (array $f) => $f['statut'] === 'importee')) : null,
+            'feuilles' => isset($i['stats']['feuilles']) ? count(array_filter($i['stats']['feuilles'], static fn (array $f) => ($f['statut'] ?? 'importee') === 'importee')) : null,
             'erreur' => $i['erreur'] ? mb_substr($i['erreur'], 0, 160) : null,
         ], Import::derniers(30));   // la liste défile au-delà de 6 lignes (dashboard.css)
 

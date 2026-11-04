@@ -20,8 +20,8 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous">
   <link rel="stylesheet" href="assets/css/design-system.css?v=20261021-15">
-  <link rel="stylesheet" href="assets/css/components.css?v=20261104-o3">
-  <link rel="stylesheet" href="assets/css/dashboard.css?v=20261104-p1">
+  <link rel="stylesheet" href="assets/css/components.css?v=20261104-v1">
+  <link rel="stylesheet" href="assets/css/dashboard.css?v=20261104-u1">
   <link rel="stylesheet" href="assets/css/print.css?v=20261021-15">
   <style>/* Page Paramètres (reprise de parametres.php, limitée à #view-parametres) */
 
@@ -145,6 +145,12 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
               <div class="pb-groupe" id="pb-vue" role="group" aria-label="Vue des graphiques" title="Vue des graphiques : par jour, semaine ou mois"><span class="pb-lib">Vue</span><span class="pb-btns">
                 <button type="button" class="pb-btn" data-vue-gran="jour">Jour</button><button type="button" class="pb-btn" data-vue-gran="semaine">Semaine</button><button type="button" class="pb-btn" data-vue-gran="mois">Mois</button></span></div>
             </div>
+            </div>
+            <!-- Pages Facturation : à la place des dates, les mois dont un fichier « POINT VENTES » a été importé (le dernier par défaut) -->
+            <div class="date-filters filtres-ligne no-print" id="fact-periode" hidden>
+              <div class="periode-barre"><div class="pb-groupe" role="group" aria-label="Mois facturé" title="Mois facturé : mois dont le fichier de facture a été importé">
+                <span class="pb-lib">Mois facturé</span><span class="pb-btns" id="fp-mois"></span>
+                <label class="sr-only" for="fp-autre">Autre mois facturé</label><select class="select input-sm pb-select" id="fp-autre" title="Autre mois facturé, classé par année"><option value="">Autre mois…</option></select></div></div>
             </div>
           </div>
           <!-- Barre d'export / partage : agit sur la vue affichée -->
@@ -298,26 +304,26 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer crossorigin="anonymous"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer crossorigin="anonymous"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer crossorigin="anonymous"></script>
-  <script src="assets/js/utils.js?v=20261104-k1" defer></script>
+  <script src="assets/js/utils.js?v=20261104-r1" defer></script>
   <script src="assets/js/table.js?v=20261021-15" defer></script>
-  <script src="assets/js/api.js?v=20261022-2" defer></script>
+  <script src="assets/js/api.js?v=20261104-v1" defer></script>
   <script src="assets/js/store.js?v=20261027-offres" defer></script>
   <script src="assets/js/regles.js?v=20261027-offres" defer></script>
-  <script src="assets/js/objectifs.js?v=20261104-q1" defer></script>
+  <script src="assets/js/objectifs.js?v=20261104-s1" defer></script>
   <script src="assets/js/parser.js?v=20261027-offres" defer></script>
-  <script src="assets/js/calculs.js?v=20261104-q2" defer></script>
-  <script src="assets/js/ui.js?v=20261104-s1" defer></script>
-  <script src="assets/js/dashboard.js?v=20261104-p2" defer></script>
-  <script src="assets/js/rgz.js?v=20261104-q1" defer></script>
-  <script src="assets/js/point_jour.js?v=20261104-q1" defer></script>
-  <script src="assets/js/perf_partenaire.js?v=20261104-q1" defer></script>
+  <script src="assets/js/calculs.js?v=20261104-s1" defer></script>
+  <script src="assets/js/ui.js?v=20261104-r1" defer></script>
+  <script src="assets/js/dashboard.js?v=20261104-v1" defer></script>
+  <script src="assets/js/rgz.js?v=20261104-s1" defer></script>
+  <script src="assets/js/point_jour.js?v=20261104-s1" defer></script>
+  <script src="assets/js/perf_partenaire.js?v=20261104-r1" defer></script>
   <script src="assets/js/export.js?v=20261104-k1" defer></script>
   <script src="assets/js/partage.js?v=20261104-k1" defer></script>
   <script src="assets/js/facturation_calc.js?v=20261104-i1" defer></script>
-  <script src="assets/js/facturation.js?v=20261104-l1" defer></script>
+  <script src="assets/js/facturation.js?v=20261104-v1" defer></script>
   <script src="assets/js/analyse_calc.js?v=20261104-e1" defer></script>
   <script src="assets/js/analyse.js?v=20261104-k1" defer></script>
-  <script src="assets/js/parametres.js?v=20261104-g1" defer></script>
-  <script src="assets/js/app.js?v=20261104-o1" defer></script>
+  <script src="assets/js/parametres.js?v=20261104-r1" defer></script>
+  <script src="assets/js/app.js?v=20261104-s1" defer></script>
 </body>
 </html>

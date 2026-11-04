@@ -11,6 +11,7 @@
 use App\Auth;
 use App\Config;
 use App\Controllers\AgentController;
+use App\Controllers\FactureController;
 use App\Controllers\ImportController;
 use App\Controllers\ParametresController;
 use App\Controllers\RegleController;
@@ -45,6 +46,12 @@ $routes = [
     ['POST', 'imports/souscriptions', [ImportController::class, 'souscriptions']],
     ['POST', 'imports/objectifs', [ImportController::class, 'objectifs']],
     ['POST', 'imports/objectifs/confirmer', [ImportController::class, 'confirmerObjectifs']],
+
+    // Facturation Celtiis : fichiers « POINT VENTES » de fin de mois (table factures_lignes)
+    ['POST', 'imports/factures', [FactureController::class, 'importer']],
+    ['GET', 'factures/mois', [FactureController::class, 'mois']],
+    ['GET', 'factures/imports', [FactureController::class, 'imports']],
+    ['GET', 'factures', [FactureController::class, 'lignes']],
 
     // Consultation / filtrage / ajout manuel
     ['GET', 'souscriptions/periodes', [SouscriptionController::class, 'periodes']],

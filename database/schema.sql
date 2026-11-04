@@ -152,3 +152,45 @@ CREATE TABLE IF NOT EXISTS `connexions_echouees` (
   KEY `connexions_echouees_email_ip_index` (`email`, `ip`, `created_at`),
   KEY `connexions_echouees_ip_index` (`ip`, `created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Facturation Celtiis : lignes des fichiers « POINT VENTES » reçus en fin de mois (Facturation › Tableau de bord › Importer).
+-- Seules les feuilles « Liste (des) clients » et « Liste des arriérés » sont lues (repérées par leur nom puis par leurs colonnes).
+--   source = type de la FEUILLE lue (clients | arrieres) : réimporter un fichier remplace, pour son mois, les lignes des mêmes
+--            types de feuilles (un fichier d'arriérés envoyé à part ne supprime pas la liste des clients, et inversement) ;
+--   liste  = nature de la LIGNE (une ligne « Arriérés à payer » peut se trouver dans la liste des clients) ;
+--   etat   = PAYE (« A PAYER ») | REPORT_PAYE (arriéré à payer) | REPORTE (« PAIEMENT REPORTE ») | NON_VALIDE.
+-- La facture ne compte que PAYE + REPORT_PAYE. Toutes les autres colonnes du fichier sont gardées telles quelles dans « donnees ».
+CREATE TABLE IF NOT EXISTS `factures_lignes` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `mois` char(7) NOT NULL,
+  `import_id` bigint unsigned DEFAULT NULL,
+  `source` varchar(10) NOT NULL,
+  `liste` varchar(10) NOT NULL,
+  `fichier` varchar(255) DEFAULT NULL,
+  `feuille` varchar(100) NOT NULL,
+  `ligne` int unsigned NOT NULL,
+  `login` varchar(120) DEFAULT NULL,
+  `login_key` varchar(120) DEFAULT NULL,
+  `partenaire` varchar(60) DEFAULT NULL,
+  `facture` varchar(40) DEFAULT NULL,
+  `ref_paiement` varchar(40) DEFAULT NULL,
+  `numero` varchar(30) DEFAULT NULL,
+  `montant` decimal(12,2) DEFAULT NULL,
+  `paiement` varchar(80) DEFAULT NULL,
+  `etat` varchar(12) NOT NULL,
+  `statut` varchar(30) DEFAULT NULL,
+  `type_client` varchar(40) DEFAULT NULL,
+  `client` varchar(190) DEFAULT NULL,
+  `debit` varchar(40) DEFAULT NULL,
+  `offre` varchar(120) DEFAULT NULL,
+  `date_commande` datetime DEFAULT NULL,
+  `date_update` datetime DEFAULT NULL,
+  `motif` varchar(190) DEFAULT NULL,
+  `donnees` json DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `factures_lignes_mois_index` (`mois`, `source`),
+  KEY `factures_lignes_etat_index` (`mois`, `etat`),
+  KEY `factures_lignes_login_index` (`login_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

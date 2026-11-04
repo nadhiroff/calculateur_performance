@@ -44,5 +44,15 @@ t('mois entier 01 → 31/10 = objectif du mois 1 487 (79 × 22 = 1 738 plafonné
 t('01 → 26/10 : 79 × 18 = 1 422, sous le plafond', () => assert.strictEqual(O.objectifPeriode(OCT, '2026-10', '2026-10-01', '2026-10-26'), 1422));
 t('01 → 27/10 : 79 × 19 = 1 501 → plafonné à 1 487', () => assert.strictEqual(O.objectifPeriode(OCT, '2026-10', '2026-10-01', '2026-10-27'), 1487));
 
+console.log('\nTotaux d\'équipe = ceux enregistrés en base (fichier), comme la ligne de l\'équipe dans Paramètres');
+{ // OMEGA novembre 2026 : fichier 60 + 40 = 100, logins 65 + 30 = 95 (ojeovani à 0)
+  const NOV = { periode: '2026-11', calendrier: { ouvres: [2, 3] }, equipes: [{ id: 'OMEGA', jour: 6, semaine: 25, fichier: { b2c: 60, b2b: 40, mois: 100 }, logins: [
+    { login: 'a.ftth', b2c: 20, b2b: 10 }, { login: 'b.ftth', b2c: 15, b2b: 0 }, { login: 'c.ftth', b2c: 10, b2b: 0 }, { login: 'd.ftth', b2c: 20, b2b: 20 }, { login: 'e.ftth', b2c: 0, b2b: 0 }] }] };
+  t('OMEGA : mois = 100 (fichier), pas 95 (somme des logins)', () => assert.strictEqual(JSON.stringify(O.equipeMois(NOV.equipes[0], NOV)), JSON.stringify({ b2c: 60, b2b: 40, mois: 100 })));
+  t('TOTAL = 100 / 6 / 25', () => { const x = O.totaux(NOV); assert.deepStrictEqual([x.b2c, x.b2b, x.mois, x.jour, x.semaine], [60, 40, 100, 6, 25]); });
+  const sans = { periode: '2026-11', calendrier: { ouvres: [2] }, equipes: [{ id: 'X', jour: 1, semaine: 5, logins: [{ login: 'a', b2c: 3, b2b: 2 }] }] };
+  t('sans totaux de fichier : somme des logins', () => assert.strictEqual(O.totaux(sans).mois, 5));
+  t('octobre : TOTAL inchangé 1 487', () => assert.strictEqual(O.totaux(OCT).mois, 1487));
+}
 console.log('\n' + ok + ' réussis, ' + ko + ' échec(s)');
 process.exit(ko ? 1 : 0);

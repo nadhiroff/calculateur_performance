@@ -23,7 +23,7 @@ final class Response
         if (! headers_sent()) {
             http_response_code($this->status);
             header('Content-Type: application/json; charset=utf-8');
-            header('Cache-Control: no-cache, private');
+            header('Cache-Control: no-store, private');   // rien n'est gardé par le navigateur
             header('X-Content-Type-Options: nosniff');
         }
         if ($this->donnees instanceof \Closure) {

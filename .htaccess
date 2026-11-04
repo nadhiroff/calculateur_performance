@@ -51,13 +51,10 @@
     AddOutputFilterByType DEFLATE text/html text/css text/plain application/json application/javascript text/javascript image/svg+xml
 </IfModule>
 
-# Cache navigateur : CSS / JS appelés avec ?v=… (nouvelle adresse à chaque mise à jour) gardés 30 jours, images 7 jours.
-# Les pages PHP et l'API envoient leurs propres en-têtes « no-store » / « no-cache » : jamais mises en cache.
+# Aucun cache navigateur : CSS, JS et images sont rechargés depuis le serveur à chaque visite (rien n'est gardé sur le poste).
+# Les pages PHP et l'API envoient aussi « no-store ».
 <IfModule mod_headers.c>
-    <FilesMatch "\.(css|js)$">
-        Header set Cache-Control "public, max-age=2592000"
-    </FilesMatch>
-    <FilesMatch "\.(png|jpe?g|gif|svg|ico|webp)$">
-        Header set Cache-Control "public, max-age=604800"
+    <FilesMatch "\.(css|js|png|jpe?g|gif|svg|ico|webp)$">
+        Header set Cache-Control "no-store, private"
     </FilesMatch>
 </IfModule>

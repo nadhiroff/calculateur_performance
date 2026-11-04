@@ -80,6 +80,13 @@
       importer: (fichier, mois, miseAJour) => requete('/imports/objectifs', { method: 'POST', form: fd({ fichier, mois, mise_a_jour: !!miseAJour }) }),
       confirmer: (token) => requete('/imports/objectifs/confirmer', { method: 'POST', json: { token } }),
     },
+    /* Facturation Celtiis : fichiers « POINT VENTES » de fin de mois */
+    factures: {
+      importer: (fichier, mois) => requete('/imports/factures', { method: 'POST', form: fd({ fichier, mois }) }),
+      mois: () => requete('/factures/mois'),
+      imports: () => requete('/factures/imports'),
+      lignes: (mois) => requete('/factures', { params: { mois } }),
+    },
     /* Vue d'ensemble de toute la base (tableau de bord du Directeur) */
     synthese: (periode) => requete('/synthese', { params: periode }),   // periode {du, au} ; sans : année en cours
     /* Données Celtiis (souscriptions) : remplace IndexedDB « ct_session » */

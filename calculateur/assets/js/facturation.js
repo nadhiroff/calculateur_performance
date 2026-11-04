@@ -2,7 +2,8 @@
    facturation.js — pages « Challenge » et « Facturation Celtiis » du tableau de bord interne :
    Challenge login / équipe · Facturation B2C · Facturation B2B · Point financier par login · Reports.
    Les calculs sont dans facturation_calc.js (testés : node tests/facturation.test.js).
-   Source : les souscriptions déjà en base (fichier principal importé par le Tableau de bord) — aucun fichier à importer ici.
+   Source de la facture : fichiers « POINT VENTES » de fin de mois importés dans Facturation › Tableau de bord (table factures_lignes) ;
+   seules les lignes « A PAYER » et les arriérés sont facturés. Les Challenges utilisent les souscriptions du Tableau de bord.
    ========================================================================== */
 (function () {
   'use strict';
@@ -11,7 +12,7 @@
   const mn = (n) => CT.fmt.int(n), fc = (n) => CT.fmt.fcfa(n), esc = CT.esc;
 
   const VUES = { challogin: 'Challenge login', chalequipe: 'Challenge équipe', factb2c: 'Facturation B2C', factb2b: 'Facturation B2B', finance: 'Point financier par login', reports: 'Reports', factdash: 'Tableau de bord des factures', factevo: 'Évolution de la facturation', factperf: 'Performance agents', factreco: 'Recommandations' };
-  const S = CT.factEtat = { b2c: null, b2b: null, pas: 'semaine', params: {}, c2c: null, c2b: null, pf: null };
+  const S = CT.factEtat = { b2c: null, b2b: null, pas: 'semaine', params: {}, c2c: null, c2b: null, pf: null, mois: null, moisDispo: null, cache: new Map(), choix: null, historique: null };
 
   /* ---------- Lecture des fichiers ---------- */
   const entetes = (ws) => { const a = XLSX.utils.sheet_to_json(ws, { header: 1, range: 0, defval: null })[0] || []; return a.map((x) => String(x == null ? '' : x).trim().toUpperCase().replace(/\s+/g, '_')); };
@@ -40,55 +41,129 @@
   }
 
   /* ---------- Paramètres et calculs ---------- */
-  /* Objectif FTTH du mois (prime d'atteinte de l'objectif) : automatiquement l'objectif B2C du mois facturé, Paramètres › Objectifs */
+  /* Objectif FTTH du mois (prime d'atteinte de l'objectif) : automatiquement l'objectif B2C du mois facturé, Paramètres › Objectifs.
+     Mois sans objectifs propres (objectifs hérités d'un autre mois) : pas de prime d'objectif — on ne juge pas un mois sur l'objectif d'un autre. */
   function regles(cle) {
-    const m = cle || (CT.etat && CT.etat.cle), obj = m && CT.store && CT.store.actifs ? CT.objectifs.totaux(CT.store.actifs(m).objectifs).b2c : 0;
+    const m = cle || (CT.etat && CT.etat.cle), P = m && CT.store && CT.store.actifs ? CT.store.actifs(m) : null;
+    const obj = P && !P.herite ? CT.objectifs.totaux(P.objectifs).b2c : 0;
     return { regles: { b2c: { objectif: obj > 0 ? obj : null } } };
   }
   function recalculer() {
-    const o = regles();
+    const o = regles(S.mois);
     S.c2c = S.b2c ? F.calculB2C(S.b2c.lignes, o) : null;
     S.c2b = S.b2b ? F.calculB2B(S.b2b.lignes, o) : null;
     S.pf = S.c2c || S.c2b ? F.pointFinancier(S.c2c, S.c2b, o) : null;
   }
 
-  /* ---------- Données : souscriptions en base (chargées par le Tableau de bord), partenaire prioritaire, mois de la date de fin ----------
-     Règle (README : « OK = vente validée, VALIDE = en attente ») :
-       • vente du mois en STATUS OK → « A PAYER » (facturée) ; en VALIDE → « PAIEMENT REPORTÉ » (non facturée, suivie dans Reports) ;
-       • vente d'un mois antérieur passée OK ce mois-ci (DATE_UPDATE dans le mois) → « REPORT PAYÉ » (facturée) ; encore VALIDE → reportée dans son propre mois ;
-       • débit FTTH_Home_* → facture B2C ; autres débits (FTTH_PRO, FIBRE_…) → facture B2B. */
-  async function depuisBase() {
-    const e = CT.etat;
-    if (!e || !e.toutes || !e.toutes.length || !e.cle || !e.res) { if (!S.test) { S.b2c = S.b2b = null; recalculer(); } return; }
-    if (S.test) return;   // données de test chargées par CT.factUI.charger
-    const M = e.cle, pr = e.prioritaire, cle = M + '|' + e.jourRef + '|' + pr + '|' + e.toutes.length;
-    if (S.cleBase === cle) return;
-    // Fenêtre FIXE (3 mois jusqu'à la date de fin, lus en base) : la facture d'un mois ne dépend pas de la date de début affichée
-    const d = await CT.analyse.donnees(); if (!d) return;
-    const { b2c, b2b } = lignesFacturation(d.toutes, d.entete, M, e.jourRef, pr);
-    const src = { fichier: 'Base de données', onglet: CT.date.libelleMois(M) + ' · ' + pr };
-    S.b2c = b2c.length ? Object.assign({ lignes: b2c, ignorees: { sansDebit: 0 } }, src) : null;
-    S.b2b = b2b.length ? Object.assign({ lignes: b2b }, src) : null;
-    S.cleBase = cle; recalculer();
+  /* ---------- Données : fichiers « POINT VENTES » importés (API /factures) ----------
+     Chaque ligne du fichier a un état calculé à l'import (src/Services/FactureImporter.php) :
+       PAYE = « A PAYER » (facturée) · REPORT_PAYE = arriéré à payer (facturé, compté à part) · REPORTE = « PAIEMENT REPORTE » · NON_VALIDE = le reste.
+     Débit FTTH_Home_* → facture B2C ; autres débits (FTTH_PRO, FIBRE_…) → facture B2B. Mois affiché : celui choisi, sinon le dernier importé. */
+  async function listeMois(forcer) {
+    if (!S.moisDispo || forcer) S.moisDispo = ((await CT.api.factures.mois()) || {}).mois || [];
+    return S.moisDispo;
   }
-  /** Lignes à facturer du mois M (jusqu'à jourFin) pour le partenaire pr, à partir des souscriptions en base (règle ci-dessus). */
-  function lignesFacturation(toutes, entete, M, jourFin, pr) {
-    const H = (entete || []).map((x) => String(x || '').trim().toUpperCase()), iDeb = H.indexOf('DEBIT'), iUpd = H.indexOf('DATE_UPDATE');
-    const debut = M + '-01', idx = CT.objectifs.indexLogins(CT.store.actifs(M).objectifs), b2c = [], b2b = [];
-    toutes.forEach((l) => {
-      if (l.partenaire !== pr || !l.jour || l.jour > jourFin) return;
-      const debit = String((l.brut || [])[iDeb] == null ? '' : l.brut[iDeb]).trim(), upd = String((l.brut || [])[iUpd] || '').slice(0, 7);
-      if (!debit) return;
-      let paiement;
-      if (l.jour >= debut) paiement = l.statut === 'OK' ? 'PAYE' : l.statut === 'VALIDE' ? 'REPORTE' : 'NON_VALIDE';
-      else if (l.statut === 'OK' && upd === M) paiement = 'REPORT_PAYE';
-      else return;   // vente d'un mois antérieur : déjà facturée dans son mois, ou encore en attente (reportée dans SON mois)
-      const o = idx.get(l.loginKey), base = { login: l.login, loginKey: l.loginKey, jour: l.jour, equipe: o ? o.equipe : '' };
-      if (/^FTTH_HOME_/i.test(debit)) b2c.push(Object.assign(base, { debit, paiement }));
-      else b2b.push(Object.assign(base, { debit: debit.toUpperCase().replace(/\s+/g, '_'), partenaire: pr, typeVente: paiement === 'REPORT_PAYE' ? 'Report' : M,
-        paiement: paiement === 'REPORT_PAYE' ? 'PAYE' : paiement }));
+  async function lignesMois(M) {
+    if (!S.cache.has(M)) S.cache.set(M, ((await CT.api.factures.lignes(M)) || {}).lignes || []);
+    return S.cache.get(M);
+  }
+  function oublier() { S.moisDispo = null; S.historique = null; S.cache.clear(); S.cleBase = null; }
+  /** Lignes du fichier → lignes du moteur de facture (facturation_calc.js). */
+  function convertir(rows, M) {
+    const pr = (CT.etat && CT.etat.prioritaire) || 'RGZ', b2c = [], b2b = [];
+    const idx = CT.store && CT.store.actifs ? CT.objectifs.indexLogins(CT.store.actifs(M).objectifs) : new Map();
+    rows.forEach((r) => {
+      const login = r.login || '', loginKey = r.login_key || F.cleLogin(login), o = idx.get(loginKey), debit = String(r.debit || '').toUpperCase();
+      const base = { login, loginKey, jour: r.date_commande ? String(r.date_commande).slice(0, 10) : null, equipe: o ? o.equipe : '', msisdn: r.numero || '', statut: r.statut || '', facture: r.facture || '', liste: r.liste };
+      if (!debit || /^FTTH_HOME_/.test(debit)) b2c.push(Object.assign(base, { debit, paiement: r.etat }));
+      else b2b.push(Object.assign(base, { debit, partenaire: pr, typeVente: r.etat === 'REPORT_PAYE' ? 'Report' : M, paiement: r.etat === 'REPORT_PAYE' ? 'PAYE' : r.etat }));
     });
     return { b2c, b2b };
+  }
+  async function depuisBase() {
+    if (S.test) return;   // données de test chargées par CT.factUI.charger
+    const liste = await listeMois();
+    if (!liste.length) { S.mois = null; S.b2c = S.b2b = null; S.cleBase = null; recalculer(); return; }
+    // Mois facturé : celui choisi dans la barre « Mois facturé » (en haut), sinon le DERNIER mois importé — toujours un mois qui a un fichier,
+    // quelle que soit l'année (2026, 2027, 2028…). Le choix vit le temps de la page : après actualisation, retour au dernier mois.
+    const dispo = liste.map((x) => x.mois), M = dispo.includes(S.choix) ? S.choix : dispo[dispo.length - 1];
+    if (S.cleBase === M) return;
+    const { b2c, b2b } = convertir(await lignesMois(M), M), info = liste.find((x) => x.mois === M) || {};
+    const src = { fichier: info.fichiers || 'Fichier importé', onglet: CT.date.libelleMois(M) };
+    S.mois = M;
+    S.b2c = b2c.length ? Object.assign({ lignes: b2c, ignorees: { sansDebit: 0 } }, src) : null;
+    S.b2b = b2b.length ? Object.assign({ lignes: b2b }, src) : null;
+    S.cleBase = M; recalculer();
+  }
+
+  /** Affiche la facture du mois m (barre « Mois facturé » ou après un import). */
+  function choisirMois(m) { S.choix = m || null; S.cleBase = null; rendre(); }
+
+  /* Barre « Mois facturé » de l'en-tête (pages Facturation, à la place des dates) : les 3 derniers mois importés en boutons,
+     tous les autres dans « Autre mois… », classés par année. */
+  function majBarreFacture(visible) {
+    const zone = $('#fact-periode'), L = S.moisDispo || [];
+    if (!zone) return;
+    zone.hidden = !visible || !L.length; if (zone.hidden) return;
+    const trois = L.slice(-3), annees = new Set(trois.map((x) => x.mois.slice(0, 4))).size > 1 || trois[trois.length - 1].mois.slice(0, 4) !== String(new Date().getFullYear());
+    const lib = (m) => { const l = CT.date.libelleMois(m); return annees ? l : l.split(' ')[0]; };
+    const btns = $('#fp-mois'), html = trois.map((x) => `<button type="button" class="pb-btn" data-fmois="${x.mois}" aria-pressed="${x.mois === S.mois}" title="Facture de ${esc(CT.date.libelleMois(x.mois))}">${esc(lib(x.mois))}</button>`).join('');
+    if (btns.innerHTML !== html) btns.innerHTML = html;
+    const sel = $('#fp-autre'), opt = (v, t, sl) => `<option value="${v}"${sl ? ' selected' : ''}>${esc(t)}</option>`;
+    const autres = L.length > trois.length;
+    let h = opt('', autres ? 'Autre mois…' : L.length > 1 ? 'Tous les mois importés' : '1 seul mois importé', !L.some((x) => x.mois === S.mois) || trois.some((x) => x.mois === S.mois));
+    [...new Set(L.map((x) => x.mois.slice(0, 4)))].sort().reverse().forEach((an) => {
+      h += `<optgroup label="${an}">` + L.filter((x) => x.mois.slice(0, 4) === an).reverse().map((x) => opt(x.mois, CT.date.libelleMois(x.mois), x.mois === S.mois && !trois.some((t) => t.mois === S.mois))).join('') + '</optgroup>';
+    });
+    if (sel.dataset.html !== h) { sel.innerHTML = h; sel.dataset.html = h; }
+    sel.disabled = L.length < 2;
+  }
+
+  /* Historique des fichiers de facture importés (15 derniers) */
+  async function historique() {
+    if (!S.historique) { try { S.historique = ((await CT.api.factures.imports()) || {}).imports || []; } catch (e) { S.historique = []; } }
+    return S.historique;
+  }
+  const depuis = (iso) => { const d = (Date.now() - new Date(iso).getTime()) / 60000; return d < 1 ? 'à l\'instant' : d < 60 ? 'il y a ' + Math.round(d) + ' min' : d < 1440 ? 'il y a ' + Math.round(d / 60) + ' h' : 'le ' + new Date(iso).toLocaleDateString('fr-FR'); };
+  function carteHistorique() {
+    const H = S.historique || [], lib = { ok: ['fa-check', '', 'Réussi', 'badge-pos'], echec: ['fa-xmark', 'neg', 'Échec', 'badge-neg'], en_cours: ['fa-spinner', 'info', 'En cours', 'badge-info'] };
+    return `<section class="card"><div class="card-head"><div><h3>Historique des fichiers</h3><p>Fichiers de facture importés${H.length > 6 ? ' · ' + H.length + ' derniers, faites défiler' : ''}</p></div></div>
+      <ul class="activity">${H.map((i) => { const [ic, cls, txt, badge] = lib[i.statut] || lib.en_cours;
+        const det = i.statut === 'ok' ? (i.mois ? CT.date.libelleMois(i.mois) + ' · ' : '') + mn(i.facturees || 0) + ' facturée(s)' + (i.arrieres ? ' dont ' + mn(i.arrieres) + ' arriéré(s)' : '') + ' · ' + mn(i.reportees || 0) + ' reportée(s)' + (i.remplacees ? ' · remplace l\'import précédent' : '') : (i.erreur || '');
+        return `<li><span class="ic ${cls}" aria-hidden="true"><i class="fa-solid ${ic}"></i></span><div><div class="nm" title="${esc(i.nom)}">${esc(i.nom)}</div><small title="${esc(det + (i.feuilles && i.feuilles.length ? ' · feuilles : ' + i.feuilles.join(', ') : ''))}">${esc(det)}</small></div><div style="text-align:right"><span class="badge ${badge}">${txt}</span><small>${i.date ? depuis(i.date) : ''}</small></div></li>`; }).join('') || '<li class="muted">Aucun fichier importé.</li>'}</ul></section>`;
+  }
+
+  /* ---------- Import des fichiers « POINT VENTES » (bouton du Tableau de bord des factures, plusieurs fichiers possibles) ---------- */
+  async function importerFactures(fichiers) {
+    const bilan = []; let dernier = null;
+    for (const f of fichiers) {
+      if (!/\.(xlsx|xls)$/i.test(f.name)) { CT.toast('« ' + f.name + ' » refusé : seuls les fichiers Excel (.xlsx, .xls) sont acceptés.', 'err', 8000); continue; }
+      const info = $('#fact-import-msg'); if (info) info.textContent = 'Lecture et enregistrement de « ' + f.name + ' »…';
+      try {
+        const r = await CT.api.factures.importer(f);
+        bilan.push(r.message); dernier = r.stats.mois;
+        (r.stats.avertissements || []).forEach((a) => CT.toast(a, 'warn', 9000));
+      } catch (e) {
+        CT.modal({ titre: 'Fichier non enregistré', actions: [{ label: 'Compris', valeur: true, variante: 'primary' }],
+          corps: '<div class="alert neg"><span class="alert-ic">' + CT.icone('critique') + '</span><div><strong>' + esc(f.name) + '</strong><span>' + esc(e.message) + '</span></div></div>'
+            + '<p class="muted" style="margin-top:12px">Rien n\'a été enregistré pour ce fichier : la base est restée dans son état précédent.</p>' });
+      }
+    }
+    if (bilan.length) CT.toast(bilan.join(' · '), 'ok', 12000);
+    oublier(); if (dernier) choisirMois(dernier); else rendre();
+  }
+  /** Carte « Fichier de facture » en tête du Tableau de bord des factures (même présentation que le Tableau de bord général). */
+  function carteImport() {
+    const L = S.moisDispo || [], info = L.find((x) => x.mois === S.mois), choix = '';
+    return `<section class="card flat no-print" aria-label="Fichier de facture">
+      <div class="file-chip"><div><div class="kpi-label">Fichier de facture (POINT VENTES)</div>
+        <strong>${info ? esc(info.fichiers) : 'Aucun fichier importé'}</strong>
+        <div class="kpi-sub">${info ? esc(CT.date.libelleMois(info.mois)) + ' · ' + mn(info.a_payer) + ' à payer · ' + mn(info.arrieres) + ' arriéré(s) · ' + mn(info.reportees) + ' paiement(s) reporté(s) · ' + mn(info.non_validees) + ' non validée(s)'
+          : 'Feuilles lues : « Liste (des) clients » et « Liste des arriérés ». Facturées : lignes A PAYER + arriérés.'}</div>
+        <div class="mini-cap" id="fact-import-msg" aria-live="polite"></div></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">${choix}
+          <label class="btn ${info ? 'btn-secondary' : 'btn-primary'}" for="fact-fichier"><i class="fa-solid ${info ? 'fa-file-circle-plus' : 'fa-file-import'}" aria-hidden="true"></i>${info ? 'Ajouter un nouveau fichier' : 'Importer le fichier'}</label>
+          <input type="file" id="fact-fichier" accept=".xlsx,.xls" multiple hidden></div></div></section>`;
   }
 
   /* ---------- Éléments communs ---------- */
@@ -102,11 +177,13 @@
       ${d ? `<span class="muted"> ${esc(d.fichier)} · onglet « ${esc(d.onglet)} » · ${mn(d.lignes.length)} lignes lues</span>` : '<span class="muted"> Aucun fichier importé.</span>'}</div></section>`;
   }
   function zoneBase(seg) {
-    const e = CT.etat, d = S[seg], n = (p) => (d ? d.lignes.filter((l) => l.paiement === p).length : 0);
-    return `<section class="card no-print fact-source"><div class="card-head"><div><h3>Données de ${e && e.cle ? esc(CT.date.libelleMois(e.cle)) : '—'} · ${esc((e && e.prioritaire) || '')}</h3>
-      <p>Calculé depuis les souscriptions en base (fichier principal importé par le Tableau de bord), du 1er au ${e && e.jourRef ? CT.date.court(e.jourRef) : '—'}. Ventes <b>OK</b> = à payer ; <b>VALIDE</b> = paiement reporté ; vente d'un mois précédent passée OK ce mois-ci = report payé. Changez la date de fin (en haut) pour un autre mois.</p></div></div>
-      <p class="muted">${seg.toUpperCase()} : ${mn(n('PAYE'))} à payer · ${mn(n('REPORT_PAYE'))} report(s) payé(s) · ${mn(n('REPORTE'))} reportée(s)</p></section>`;
+    const d = S[seg], n = (p) => (d ? d.lignes.filter((l) => l.paiement === p).length : 0);
+    const arr = d ? d.lignes.filter((l) => l.liste === 'arrieres' && (l.paiement === 'PAYE' || l.paiement === 'REPORT_PAYE')).length : 0;
+    return `<section class="card no-print fact-source"><div class="card-head"><div><h3>Fichier de ${S.mois ? esc(CT.date.libelleMois(S.mois)) : '—'}${d ? ' · ' + esc(d.fichier) : ''}</h3>
+      <p>Facture calculée depuis le fichier « POINT VENTES » importé dans <a class="lien-nu" href="#facturation">Facturation › Tableau de bord</a> (feuilles « Liste des clients » et « Liste des arriérés »). Lignes <b>A PAYER</b> + <b>arriérés</b> = facturées ; <b>PAIEMENT REPORTE</b> = reportées ; <b>VENTE NON VALIDEE</b> = non facturées.</p></div></div>
+      <p class="muted">${seg.toUpperCase()} : ${mn(n('PAYE') + n('REPORT_PAYE') - arr)} à payer · ${mn(arr)} arriéré(s) · ${mn(n('REPORTE'))} reportée(s) · ${mn(n('NON_VALIDE'))} non validée(s)</p></section>`;
   }
+  const sansFichier = (texte) => texte;
   function vide(seg, texte) { return `<div class="card empty"><i class="fa-solid fa-file-import" aria-hidden="true"></i><h3>Aucune donnée pour le moment</h3><p>${texte}</p></div>`; }
   function tuiles(l) { return `<div class="grid-tuiles fact-tuiles">${l.map((t) => CT.ui.tuile(t)).join('')}</div>`; }
   function bouton(id, icone, texte) { return `<button class="btn btn-secondary btn-sm" type="button" id="${id}"><i class="fa-solid ${icone}" aria-hidden="true"></i>${texte}</button>`; }
@@ -156,7 +233,7 @@
   function vueB2C() {
     const root = $('#factb2c-content'), c = S.c2c;
     const imp = zoneBase('b2c');
-    if (!c) { root.innerHTML = imp + vide('b2c', 'Aucune vente FTTH Home du partenaire sur ce mois en base. Importez le fichier principal depuis le Tableau de bord.'); return; }
+    if (!c) { root.innerHTML = imp + vide('b2c', sansFichier('Aucune vente FTTH Home à facturer. Importez le fichier « POINT VENTES » du mois dans Facturation › Tableau de bord.')); return; }
     const params = '';
     root.innerHTML = imp + `<div class="stack">${alertes(c.alertes)}
       ${tuiles([
@@ -182,7 +259,7 @@
   function vueB2B() {
     const root = $('#factb2b-content'), c = S.c2b;
     const imp = zoneBase('b2b');
-    if (!c) { root.innerHTML = imp + vide('b2b', 'Aucune vente B2B (FTTH_PRO, FIBRE…) du partenaire sur ce mois en base.'); return; }
+    if (!c) { root.innerHTML = imp + vide('b2b', sansFichier('Aucune vente B2B (FTTH_PRO, FIBRE…) dans le fichier « POINT VENTES » de ce mois.')); return; }
     root.innerHTML = imp + `<div class="stack">${alertes(c.alertes)}
       ${tuiles([
         { icone: 'fa-building', ton: 'pos', titre: 'Ventes payées', valeur: mn(c.payees), aide: 'Dont ' + mn(c.reportsPayes) + ' report(s) payé(s) · ' + mn(c.nonPayes.reportes) + ' paiement(s) reporté(s) non facturé(s)' },
@@ -212,8 +289,8 @@
   /* ---------- Point financier par login ---------- */
   function vueFinance() {
     const root = $('#finance-content'), p = S.pf;
-    const note = (S.b2c ? '' : '<li>Fichier B2C non importé.</li>') + (S.b2b ? '' : '<li>Fichier B2B non importé.</li>');
-    if (!p) { root.innerHTML = vide('', 'Aucune vente du partenaire sur ce mois en base. Importez le fichier principal depuis le Tableau de bord.') + `<p class="muted"><a href="#facturation-b2c">Aller à la facturation B2C</a> · <a href="#facturation-b2b">Aller à la facturation B2B</a></p>`; return; }
+    const note = (S.b2c ? '' : '<li>Aucune vente B2C (FTTH Home) dans le fichier de ce mois.</li>') + (S.b2b ? '' : '<li>Aucune vente B2B (FTTH_PRO, FIBRE…) dans le fichier de ce mois.</li>');
+    if (!p) { root.innerHTML = vide('', sansFichier('Aucune facture pour le moment. Importez le fichier « POINT VENTES » du mois dans Facturation › Tableau de bord.')) + `<p class="muted"><a class="lien-nu" href="#facturation-b2c">Aller à la facturation B2C</a> · <a class="lien-nu" href="#facturation-b2b">Aller à la facturation B2B</a></p>`; return; }
     const t = p.totaux;
     root.innerHTML = `<div class="stack">${note ? `<ul class="muted">${note}</ul>` : ''}
       ${tuiles([
@@ -249,7 +326,7 @@
   function vueReports() {
     const root = $('#reports-content');
     const L = (S.b2c ? S.b2c.lignes : []).concat(S.b2b ? S.b2b.lignes : []);
-    if (!L.length) { root.innerHTML = vide('', 'Aucune vente du partenaire sur ce mois en base. Importez le fichier principal depuis le Tableau de bord.'); return; }
+    if (!L.length) { root.innerHTML = vide('', sansFichier('Aucune facture pour le moment. Importez le fichier « POINT VENTES » du mois dans Facturation › Tableau de bord.')); return; }
     const par = F.reports(L, S.pas), logins = F.reportsParLogin(L);
     const tot = par.reduce((s, r) => ({ r: s.r + r.reportes, p: s.p + r.payes }), { r: 0, p: 0 });
     root.innerHTML = `<div class="stack">
@@ -324,20 +401,26 @@
     r.netRgz = r.partRgzB2C + r.partRgzB2B + r.primePartB2C + r.primePartB2B + r.primeObjectif; r.vendeurs = r.vendeursB2C + r.vendeursB2B;
     return r;
   }
-  const moisFact = () => (CT.etat && CT.etat.cle ? CT.date.libelleMois(CT.etat.cle) + ' · du 1er au ' + CT.date.court(CT.etat.jourRef) : '');
+  const moisFact = () => (S.mois ? CT.date.libelleMois(S.mois) : '');
   const deMois = (t) => (/^[aeiouyhâ]/i.test(t) ? 'd\'' : 'de ') + t.charAt(0).toLowerCase() + t.slice(1);   // « d'octobre 2026 », « de septembre 2026 »
 
   function vueDash() {
     const root = $('#factdash-content'), c = S.c2c, d = S.c2b;
-    if (!c && !d) { root.innerHTML = zoneBase('b2c') + vide2('Aucune vente du partenaire sur ce mois en base. Importez le fichier principal depuis le Tableau de bord.'); return; }
+    if (!c && !d) {
+      const L = S.moisDispo || [];
+      const texte = !L.length ? 'Aucun fichier de facture importé : cliquez sur « Importer le fichier » et choisissez le fichier « POINT VENTES » du mois (B2C et B2B, ensemble ou séparément).'
+        : 'Aucune ligne facturée (A PAYER ou arriéré) dans le fichier de ce mois.';
+      root.innerHTML = `<div class="stack">${carteImport()}${vide2(texte)}${S.historique && S.historique.length ? carteHistorique() : ''}</div>`; return;
+    }
     const r = synthese(c, d), A = CT.analyse, pr = CT.etat.prioritaire;
     root.innerHTML = `<div class="stack">
-      ${CT.ui.enClair('Factures du mois de la date de fin (' + esc(moisFact()) + '), calculées depuis les ventes en base : mêmes montants que les pages Facture B2C et Facture B2B.', 'fa-circle-info')}
+      ${carteImport()}
+      ${CT.ui.enClair('Factures de ' + esc(moisFact()) + ', calculées depuis le fichier « POINT VENTES » importé (lignes A PAYER + arriérés) : mêmes montants que les pages Facture B2C et Facture B2B.', 'fa-circle-info')}
       <div class="grid-kpi">
         ${A.kpi('fa-file-invoice-dollar', 'pos', 'Total à facturer TTC', fc(r.ttc), 'HT ' + fc(r.ht) + ' · TVA 18 % ' + fc(r.tva))}
         ${A.kpi('fa-house-signal', 'info', 'Facture B2C (HT)', fc(r.htB2C), mn(r.ventesB2C) + ' ventes facturées')}
         ${A.kpi('fa-building', 'info', 'Facture B2B (HT)', fc(r.htB2B), mn(r.ventesB2B) + ' ventes facturées')}
-        ${A.kpi('fa-hourglass-half', r.reportes ? 'warn' : '', 'Reportées', mn(r.reportes), 'non facturées ce mois (statut VALIDE)')}
+        ${A.kpi('fa-hourglass-half', r.reportes ? 'warn' : '', 'Reportées', mn(r.reportes), 'non facturées ce mois (PAIEMENT REPORTE)')}
         ${A.kpi('fa-sack-dollar', 'pos', 'Net ' + esc(pr), fc(r.netRgz), pcx(r.ht ? r.netRgz / r.ht : null) + ' de la facture HT')}
         ${A.kpi('fa-user-tie', '', 'Reversé aux vendeurs', fc(r.vendeurs), 'commissions + primes vendeurs')}</div>
       <div class="grid-2">
@@ -346,7 +429,7 @@
       <div class="grid-2">
         ${A.carte('fd-b2c', 'Détail B2C', esc(moisFact()), '<div id="fd-t-b2c"></div>')}
         ${A.carte('fd-b2b', 'Détail B2B', esc(moisFact()), '<div id="fd-t-b2b"></div>')}</div>
-      ${A.carte('fd-net', 'Rémunération nette ' + esc(pr), 'Facture HT = reversé aux vendeurs + net ' + esc(pr), '<div id="fd-t-net"></div>')}</div>`;
+      <div class="grid-3-1">${A.carte('fd-net', 'Rémunération nette ' + esc(pr), 'Facture HT = reversé aux vendeurs + net ' + esc(pr), '<div id="fd-t-net"></div>')}${carteHistorique()}</div></div>`;
     const t = (id, l) => $(id).append(creer({ pageSize: 0, caption: id, lignes: l.filter((x) => x.m || x.toujours), colonnes: [{ cle: 'r', titre: 'Rubrique' }, { cle: 'm', titre: 'Montant HT (FCFA)', num: true, fmt: CT.fmt.mnt }], pied: { r: 'TOTAL HT', m: CT.somme(l, (x) => x.m) } }));
     t('#fd-t-b2c', [{ r: 'One-shot (' + mn(r.ventesB2C) + ' ventes)', m: r.oneShotB2C, toujours: 1 }, { r: 'Primes de performance vendeurs', m: r.primesVendB2C }, { r: 'Prime de performance partenaire', m: r.primePartB2C }, { r: 'Prime d\'atteinte de l\'objectif', m: r.primeObjectif }]);
     t('#fd-t-b2b', [{ r: 'One-shot (' + mn(r.ventesB2B) + ' ventes)', m: r.oneShotB2B, toujours: 1 }, { r: 'Primes vendeurs (hors reports)', m: r.primesVendB2B }, { r: 'Prime partenaire', m: r.primePartB2B }]);
@@ -364,20 +447,21 @@
   }
 
   async function vueEvo() {
-    const root = $('#factevo-content'); if (!CT.etat.lignes.length) { root.innerHTML = vide2('Importez le fichier principal depuis le Tableau de bord.'); return; }
+    const root = $('#factevo-content');
     root.innerHTML = '<div class="card empty" aria-busy="true"><i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i><h3>Calcul en cours…</h3></div>';
-    let d; try { d = await CT.analyse.donnees(); } catch (er) { root.innerHTML = vide2('Lecture impossible : ' + esc(er.message)); return; }
+    let liste; try { liste = await listeMois(); } catch (er) { root.innerHTML = vide2('Lecture impossible : ' + esc(er.message)); return; }
+    if (!liste.length) { root.innerHTML = vide2('Importez le fichier « POINT VENTES » du mois dans Facturation › Tableau de bord.'); return; }
     const A = CT.analyse, AC = CT.analyseCalc, pr = CT.etat.prioritaire;
-    const lignes = d.mois.map((c) => {
-      const fin = AC.finMois(c) < d.au ? AC.finMois(c) : d.au, L = lignesFacturation(d.toutes, d.entete, c, fin, pr);
+    const lignes = await Promise.all(liste.map(async (x) => {
+      const c = x.mois, L = convertir(await lignesMois(c), c);
       const o = regles(c), r = synthese(L.b2c.length ? F.calculB2C(L.b2c, o) : null, L.b2b.length ? F.calculB2B(L.b2b, o) : null)   /* objectif du mois c */, obj = A.paramsMois(c).t.mois;
-      return Object.assign(r, { cle: c, lib: AC.libMois(c), enCours: fin !== AC.finMois(c), objectif: obj, tro: obj ? r.ventes / obj : null, mixB2B: r.ventes ? r.ventesB2B / r.ventes : null });
-    });
+      return Object.assign(r, { cle: c, lib: AC.libMois(c), enCours: false, objectif: obj, tro: obj ? r.ventes / obj : null, mixB2B: r.ventes ? r.ventesB2B / r.ventes : null });
+    }));
     S.evo = lignes;
     lignes.forEach((x, i) => { const p = lignes[i - 1]; x.evolHT = p && p.ht ? (x.ht - p.ht) / p.ht : null; x.evolV = p && p.ventes ? (x.ventes - p.ventes) / p.ventes : null; });
-    const der = lignes[lignes.length - 1], ev = (x) => (x == null ? 'premier mois en base' : (x >= 0 ? '+' : '') + pcx(x, 0) + ' vs mois précédent');
+    const der = lignes[lignes.length - 1], ev = (x) => (x == null ? 'premier mois importé' : (x >= 0 ? '+' : '') + pcx(x, 0) + ' vs mois précédent');
     root.innerHTML = `<div class="stack">
-      ${CT.ui.enClair('Facture de chaque mois des 3 derniers mois en base (jusqu\'au ' + CT.date.court(d.au) + ', date de fin en haut de l\'écran), même règle que les factures. Objectif = Paramètres › Objectifs du mois.', 'fa-circle-info')}
+      ${CT.ui.enClair('Facture de chaque mois importé (fichiers « POINT VENTES » de Facturation › Tableau de bord), même règle que les factures : lignes A PAYER + arriérés. Objectif = Paramètres › Objectifs du mois.', 'fa-circle-info')}
       <div class="grid-kpi">
         ${A.kpi('fa-file-invoice-dollar', 'pos', 'Facture HT — ' + esc(der.lib), fc(der.ht), ev(der.evolHT))}
         ${A.kpi('fa-cart-shopping', 'info', 'Ventes facturées', mn(der.ventes), ev(der.evolV))}
@@ -470,24 +554,27 @@
   const RENDU = { challogin: () => vueChallenge('login'), chalequipe: () => vueChallenge('equipe'), factb2c: vueB2C, factb2b: vueB2B, finance: vueFinance, reports: vueReports, factdash: vueDash, factevo: vueEvo, factperf: vuePerf, factreco: vueReco };
   async function rendre() {
     const v = CT.etat.vue; masquerBarres(); if (!RENDU[v]) return;
-    if (v !== 'challogin' && v !== 'chalequipe') { try { await depuisBase(); } catch (er) { console.warn('Facturation : lecture en base impossible', er); } if (CT.etat.vue !== v) return; }
-    RENDU[v]();
+    if (v !== 'challogin' && v !== 'chalequipe') { try { await depuisBase(); if (v === 'factdash') await historique(); } catch (er) { console.warn('Facturation : lecture en base impossible', er); } if (CT.etat.vue !== v) return; }
+    await RENDU[v](); masquerBarres();
   }
   function masquerBarres() {
-    const v = CT.etat.vue, nouvelle = !!VUES[v], challenge = v.indexOf('chal') === 0, avecDonnees = !!CT.etat.lignes.length;
+    const v = CT.etat.vue, nouvelle = !!VUES[v], challenge = v.indexOf('chal') === 0, avecDonnees = !!CT.etat.lignes.length, facture = nouvelle && !challenge;
     const sb = $('#sharebar'), gf = $('#global-date-filters'), st = $('#filter-status');
-    if (sb) sb.hidden = !avecDonnees;                                // la barre d'export sert aussi sur ces pages (module ci-dessous)
-    if (st) st.hidden = nouvelle && !challenge;
-    if (gf) gf.hidden = !avecDonnees;    // challenge : période ; facturation : la date de fin choisit le mois facturé
+    if (sb) sb.hidden = facture ? !(S.c2c || S.c2b) : !avecDonnees;   // la barre d'export sert aussi sur ces pages (module ci-dessous)
+    if (st) st.hidden = facture;
+    if (gf) gf.hidden = facture || !avecDonnees;   // facture : les dates sont remplacées par la barre « Mois facturé »
+    majBarreFacture(facture);
   }
   function evenements(e) {
     const t = e.target;
     if (t.matches && t.matches('input[type=file][data-seg]') && t.files[0]) importer(t.dataset.seg, t.files[0]);
+    if (t.id === 'fact-fichier' && t.files.length) { const l = [...t.files]; t.value = ''; importerFactures(l); }
+    if (t.id === 'fp-autre' && t.value) choisirMois(t.value);
     if (t.id === 'rp-pas') { S.pas = t.value; rendre(); }
   }
   function clics(e) {
     const b = e.target.closest && e.target.closest('button[id^="xl-"]'); if (!b) return;
-    const mois = (CT.etat.cle || new Date().toISOString().slice(0, 7));
+    const mois = (S.mois || CT.etat.cle || new Date().toISOString().slice(0, 7));
     try {
       if (b.id === 'xl-b2c') telecharger('Facturation_B2C_' + mois, feuillesB2C());
       else if (b.id === 'xl-b2b' || b.id === 'xl-fb2b') telecharger('Facturation_B2B_' + mois, feuillesB2B());
@@ -498,6 +585,7 @@
   }
   document.addEventListener('change', evenements);
   document.addEventListener('click', clics);
+  document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('#fp-mois [data-fmois]'); if (b) choisirMois(b.dataset.fmois); });
 
   /* ---------- Barre d'export (Excel, PDF, CSV, WhatsApp, Gmail, Outlook, Copier) : données de chaque page Facturation ---------- */
   function feuillesReports() {

@@ -118,8 +118,8 @@
     const e = CT.etat, cle = (e.bornes && e.bornes.au ? e.bornes.au : e.jourRef).slice(0, 7), P = CT.store.actifs(cle), obj = P.objectifs, O = CT.objectifs, n = CT.fmt.nat, esc = CT.esc;
     const v = (x) => Number(x) || 0, t = O.totaux(obj);
     const lignes = obj.equipes.map((q) => {
-      const b2c = CT.somme(q.logins, (l) => v(l.b2c)), b2b = CT.somme(q.logins, (l) => v(l.b2b));
-      return `<tr class="ligne-equipe"><td><b>${esc(q.id)}</b></td><td>${esc(q.superviseur || '—')}</td><td class="num"><b>${n(b2c)}</b></td><td class="num"><b>${n(b2b)}</b></td><td class="num"><b>${n(b2c + b2b)}</b></td><td class="num"><b>${n(O.jourEq(q, obj))}</b></td><td class="num"><b>${n(O.semEq(q, obj))}</b></td></tr>`
+      const { b2c, b2b, mois } = O.equipeMois(q, obj);   // comme la ligne de l'équipe dans Paramètres
+      return `<tr class="ligne-equipe"><td><b>${esc(q.id)}</b></td><td>${esc(q.superviseur || '—')}</td><td class="num"><b>${n(b2c)}</b></td><td class="num"><b>${n(b2b)}</b></td><td class="num"><b>${n(mois)}</b></td><td class="num"><b>${n(O.jourEq(q, obj))}</b></td><td class="num"><b>${n(O.semEq(q, obj))}</b></td></tr>`
         + q.logins.map((l) => `<tr><td style="padding-left:22px">${esc(l.login)}</td><td></td><td class="num">${n(v(l.b2c))}</td><td class="num">${n(v(l.b2b))}</td><td class="num">${n(v(l.b2c) + v(l.b2b))}</td><td class="num">${n(O.jourLogin(l, obj))}</td><td class="num">${n(O.semLogin(l, obj))}</td></tr>`).join('');
     }).join('');
     return `<section class="card"><div class="card-head"><div><h3>Objectifs du mois — par équipe et par login</h3><p>${esc(CT.date.libelleMois(cle))} (mois le plus récent en base, ne suit pas la période choisie) · valeurs de Paramètres › Saisie des objectifs${P.herite ? ' · mois sans objectifs propres : ceux de ' + esc(CT.date.libelleMois(P.source)) : ''}</p></div></div>

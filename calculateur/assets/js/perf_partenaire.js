@@ -223,14 +223,14 @@
             colonnes: [{ cle: 'rang', titre: 'N°', num: true }, { cle: 'login', titre: 'Login', fmt: (v) => CT.loginCourt(v) }, { cle: 'equipe', titre: 'Équipe' }, { cle: 'real', titre: 'Réalisé', num: true }, { cle: 'tro', titre: 'TRO', num: true, fmt: (v) => CT.fmt.pct(v, 0) }, { cle: 'palier', titre: 'Palier' }] }).el);
         },
         autres(zone) {
-          let choix = (() => { try { return sessionStorage.getItem('ct_partenaire_vu'); } catch (_) { return null; } })();
+          let choix = (() => { try { return CT.memoire.getItem('ct_partenaire_vu'); } catch (_) { return null; } })();
           if (!autres.some((r) => r.partenaire === choix)) choix = autres.length ? autres[0].partenaire : '';
           zone.innerHTML = `<div class="stack">${CT.ui.enClair(`Choisissez un partenaire pour voir <b>ses</b> performances, séparément de ${CT.esc(pr)}. Le comparatif de tous les partenaires est juste en dessous.`, 'fa-handshake')}
             <div class="field choix-partenaire"><label for="pf-partenaire">Partenaire</label><select class="select" id="pf-partenaire">${autres.map((r) => `<option value="${CT.esc(r.partenaire)}"${r.partenaire === choix ? ' selected' : ''}>${CT.esc(r.partenaire)} — ${mn(r.ventes)} ventes</option>`).join('')}</select></div>
             <div id="pf-partenaire-vue" class="stack"></div>
             <section class="card comparatif" aria-labelledby="pf-comparatif-titre"><h3 id="pf-comparatif-titre"><i class="fa-solid fa-table-list" aria-hidden="true"></i> Comparatif de tous les partenaires (classement, part de marché, historique, meilleurs vendeurs)</h3><div class="stack" id="pf-comparatif"></div></section></div>`;
           const sel = zone.querySelector('#pf-partenaire'), vue = zone.querySelector('#pf-partenaire-vue');
-          const montrer = () => { try { sessionStorage.setItem('ct_partenaire_vu', sel.value); } catch (_) { /* stockage indisponible */ } rendrePartenaire(vue, ctx, sel.value); };
+          const montrer = () => { try { CT.memoire.setItem('ct_partenaire_vu', sel.value); } catch (_) { /* stockage indisponible */ } rendrePartenaire(vue, ctx, sel.value); };
           sel.addEventListener('change', montrer);
           if (choix) montrer(); else vue.innerHTML = '<p class="muted">Aucun autre partenaire sur la période.</p>';
           rendreComparatif(zone.querySelector('#pf-comparatif'), ctx);   // toujours affiché (plus de bloc replié)
