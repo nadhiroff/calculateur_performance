@@ -49,6 +49,7 @@
     return { regles: { b2c: { objectif: obj > 0 ? obj : null } } };
   }
   function recalculer() {
+    if (S.multi) return;   // plusieurs mois : résultats déjà calculés mois par mois puis additionnés (depuisBase)
     const o = regles(S.mois);
     S.c2c = S.b2c ? F.calculB2C(S.b2c.lignes, o) : null;
     S.c2b = S.b2b ? F.calculB2B(S.b2b.lignes, o) : null;
@@ -80,43 +81,127 @@
     });
     return { b2c, b2b };
   }
+  /* Sélection de la barre « Mois facturé » : un mois (« m:AAAA-MM ») ou une plage (« p:AAAA-MM|AAAA-MM » : 3 derniers mois, depuis janvier, année).
+     Sans choix (ouverture, actualisation) : le DERNIER mois importé. */
+  function moisChoisis(dispo) {
+    const v = S.choix || '', der = dispo[dispo.length - 1];
+    if (v.startsWith('p:')) { const [du, au] = v.slice(2).split('|'), l = dispo.filter((m) => m >= du && m <= au); if (l.length) return l; }
+    if (v.startsWith('m:') && dispo.includes(v.slice(2))) return [v.slice(2)];
+    return [der];
+  }
+  /** Une facture par mois : lignes du fichier → calculs B2C, B2B et point financier du mois (paliers et objectif de CE mois). */
+  async function calculMois(M) {
+    const { b2c, b2b } = convertir(await lignesMois(M), M), o = regles(M);
+    const c2c = b2c.length ? F.calculB2C(b2c, o) : null, c2b = b2b.length ? F.calculB2B(b2b, o) : null;
+    return { mois: M, b2c, b2b, c2c, c2b, pf: c2c || c2b ? F.pointFinancier(c2c, c2b, o) : null };
+  }
   async function depuisBase() {
     if (S.test) return;   // données de test chargées par CT.factUI.charger
     const liste = await listeMois();
-    if (!liste.length) { S.mois = null; S.b2c = S.b2b = null; S.cleBase = null; recalculer(); return; }
-    // Mois facturé : celui choisi dans la barre « Mois facturé » (en haut), sinon le DERNIER mois importé — toujours un mois qui a un fichier,
-    // quelle que soit l'année (2026, 2027, 2028…). Le choix vit le temps de la page : après actualisation, retour au dernier mois.
-    const dispo = liste.map((x) => x.mois), M = dispo.includes(S.choix) ? S.choix : dispo[dispo.length - 1];
-    if (S.cleBase === M) return;
-    const { b2c, b2b } = convertir(await lignesMois(M), M), info = liste.find((x) => x.mois === M) || {};
-    const src = { fichier: info.fichiers || 'Fichier importé', onglet: CT.date.libelleMois(M) };
-    S.mois = M;
-    S.b2c = b2c.length ? Object.assign({ lignes: b2c, ignorees: { sansDebit: 0 } }, src) : null;
-    S.b2b = b2b.length ? Object.assign({ lignes: b2b }, src) : null;
-    S.cleBase = M; recalculer();
+    if (!liste.length) { S.mois = null; S.moisSel = []; S.multi = false; S.parMois = []; S.b2c = S.b2b = null; S.cleBase = null; recalculer(); return; }
+    const dispo = liste.map((x) => x.mois), sel = moisChoisis(dispo), cle = sel.join(',');
+    if (S.cleBase === cle) return;
+    const par = await Promise.all(sel.map(calculMois)), M = sel[sel.length - 1];
+    const fichiers = [...new Set(sel.map((m) => (liste.find((x) => x.mois === m) || {}).fichiers).filter(Boolean))].join(' + ');
+    const src = { fichier: fichiers || 'Fichier importé', onglet: sel.length > 1 ? libSelection(sel) : CT.date.libelleMois(M) };
+    const tout = (k) => [].concat(...par.map((x) => x[k]));
+    S.mois = M; S.moisSel = sel; S.multi = sel.length > 1; S.parMois = par;
+    S.b2c = tout('b2c').length ? Object.assign({ lignes: tout('b2c'), ignorees: { sansDebit: 0 } }, src) : null;
+    S.b2b = tout('b2b').length ? Object.assign({ lignes: tout('b2b') }, src) : null;
+    if (S.multi) {   // cumul : chaque mois est calculé avec ses propres paliers, puis les montants sont additionnés
+      S.c2c = fusionB2C(par); S.c2b = fusionB2B(par); S.pf = fusionPF(par);
+    } else { S.c2c = par[0].c2c; S.c2b = par[0].c2b; S.pf = par[0].pf; }
+    S.cleBase = cle;
   }
+  /** « Août → Octobre 2026 », « Décembre 2026 → Février 2027 » */
+  function libSelection(sel) {
+    if (!sel || !sel.length) return '';
+    if (sel.length === 1) return CT.date.libelleMois(sel[0]);
+    const a = CT.date.libelleMois(sel[0]), b = CT.date.libelleMois(sel[sel.length - 1]);
+    return (sel[0].slice(0, 4) === sel[sel.length - 1].slice(0, 4) ? a.split(' ')[0] : a) + ' → ' + b + ' (' + sel.length + ' mois)';
+  }
+
+  /* ---------- Cumul de plusieurs mois : addition des résultats mensuels (mêmes champs que calculB2C / calculB2B / pointFinancier) ---------- */
+  const ajouter = (cible, src, cles) => cles.forEach((k) => { cible[k] = (cible[k] || 0) + ((src && src[k]) || 0); });
+  function fusionLogins(listes, cles) {
+    const m = new Map();
+    listes.forEach((l) => (l || []).forEach((g) => {
+      let a = m.get(g.loginKey);
+      if (!a) { a = Object.assign({}, g, { parDebit: {} }); cles.forEach((k) => { a[k] = 0; }); m.set(g.loginKey, a); }
+      ajouter(a, g, cles);
+      Object.entries(g.parDebit || {}).forEach(([d, n]) => { a.parDebit[d] = (a.parDebit[d] || 0) + n; });
+      if (!a.equipe && g.equipe) a.equipe = g.equipe;
+    }));
+    return [...m.values()];
+  }
+  const triDebits = (l) => [...new Set(l)].sort((a, b) => parseInt(a.replace(/\D/g, ''), 10) - parseInt(b.replace(/\D/g, ''), 10) || a.localeCompare(b));
+  function fusionB2C(par) {
+    const L = par.filter((x) => x.c2c); if (!L.length) return null;
+    const r = { segment: 'B2C', cumul: true, alertes: [], parDebit: {}, nonPayes: { reportes: 0, nonValides: 0 }, prixPrimePartenaire: null, objectif: null, objectifAtteint: null };
+    L.forEach(({ mois, c2c: c }) => {
+      ajouter(r, c, ['quantite', 'reportsPayes', 'oneShot', 'partVendeurs', 'partPartenaire', 'primeVendeurs', 'primePartenaire', 'primeObjectif', 'totalHT', 'tva', 'totalTTC']);
+      ajouter(r.nonPayes, c.nonPayes, ['reportes', 'nonValides']);
+      Object.entries(c.parDebit).forEach(([d, x]) => { const y = r.parDebit[d] || (r.parDebit[d] = { quantite: 0, oneShot: 0 }); y.quantite += x.quantite; y.oneShot += x.oneShot; });
+      c.alertes.forEach((a) => r.alertes.push(Object.assign({}, a, { titre: CT.date.libelleMois(mois) + ' : ' + a.titre })));
+    });
+    r.debits = triDebits(Object.keys(r.parDebit));
+    r.logins = fusionLogins(L.map((x) => x.c2c.logins), ['ventes', 'reports', 'oneShot', 'partVendeur', 'partPartenaire', 'primePerf', 'total']).sort((a, b) => b.ventes - a.ventes || a.loginKey.localeCompare(b.loginKey));
+    return r;
+  }
+  function fusionB2B(par) {
+    const L = par.filter((x) => x.c2b); if (!L.length) return null;
+    const r = { segment: 'B2B', cumul: true, alertes: [], totalParDebit: {}, nonPayes: { reportes: 0 }, prixPrimePVT: null, moisVente: libSelection(par.map((x) => x.mois)) };
+    L.forEach(({ mois, c2b: c }) => {
+      ajouter(r, c, ['payees', 'reportsPayes', 'commVTB', 'primeVTB', 'commPVT', 'primePVT', 'totalHT', 'tva', 'totalTTC']);
+      ajouter(r.nonPayes, c.nonPayes, ['reportes']);
+      ajouter(r.totalParDebit, c.totalParDebit, Object.keys(c.totalParDebit));
+      c.alertes.forEach((a) => r.alertes.push(Object.assign({}, a, { titre: CT.date.libelleMois(mois) + ' : ' + a.titre })));
+    });
+    r.debits = triDebits([].concat(...L.map((x) => x.c2b.debits)));
+    r.logins = fusionLogins(L.map((x) => x.c2b.logins), ['ventes', 'reports', 'oneShot', 'commVTB', 'commPVT', 'primeVTB', 'totalVTB']).sort((a, b) => b.ventes - a.ventes || a.loginKey.localeCompare(b.loginKey));
+    return r;
+  }
+  function fusionPF(par) {
+    const L = par.filter((x) => x.pf); if (!L.length) return null;
+    const cles = ['ventesB2C', 'ventesB2B', 'oneShotB2C', 'oneShotB2B', 'primeB2C', 'primeB2B', 'ventes', 'oneShot', 'partCommercial', 'partRGZ', 'aib', 'primes', 'net'];
+    const lignes = fusionLogins(L.map((x) => x.pf.lignes), cles).sort((a, b) => b.net - a.net || a.loginKey.localeCompare(b.loginKey)), totaux = {};
+    ajouter(totaux, {}, ['ventes', 'oneShot', 'partCommercial', 'partRGZ', 'aib', 'primes', 'net']);
+    L.forEach((x) => ajouter(totaux, x.pf.totaux, Object.keys(totaux)));
+    return { lignes, totaux, cumul: true };
+  }
+
 
   /** Affiche la facture du mois m (barre « Mois facturé » ou après un import). */
   function choisirMois(m) { S.choix = m || null; S.cleBase = null; rendre(); }
 
-  /* Barre « Mois facturé » de l'en-tête (pages Facturation, à la place des dates) : les 3 derniers mois importés en boutons,
-     tous les autres dans « Autre mois… », classés par année. */
+  /* Barre « Mois facturé » de l'en-tête (pages Facturation, à la place des dates) :
+       boutons « 3 derniers mois » + les 3 derniers mois importés ; « Autre période… » : depuis janvier, chaque année, chaque mois (classés par année).
+     Valeurs : « m:AAAA-MM » (un mois) ou « p:AAAA-MM|AAAA-MM » (cumul de plusieurs mois). */
   function majBarreFacture(visible) {
     const zone = $('#fact-periode'), L = S.moisDispo || [];
     if (!zone) return;
     zone.hidden = !visible || !L.length; if (zone.hidden) return;
-    const trois = L.slice(-3), annees = new Set(trois.map((x) => x.mois.slice(0, 4))).size > 1 || trois[trois.length - 1].mois.slice(0, 4) !== String(new Date().getFullYear());
+    const mois = L.map((x) => x.mois), der = mois[mois.length - 1], trois = mois.slice(-3), anDer = der.slice(0, 4);
+    const cur = S.multi ? 'p:' + S.moisSel[0] + '|' + S.moisSel[S.moisSel.length - 1] : 'm:' + S.mois;
+    const annees = new Set(trois.map((m) => m.slice(0, 4))).size > 1 || anDer !== String(new Date().getFullYear());
     const lib = (m) => { const l = CT.date.libelleMois(m); return annees ? l : l.split(' ')[0]; };
-    const btns = $('#fp-mois'), html = trois.map((x) => `<button type="button" class="pb-btn" data-fmois="${x.mois}" aria-pressed="${x.mois === S.mois}" title="Facture de ${esc(CT.date.libelleMois(x.mois))}">${esc(lib(x.mois))}</button>`).join('');
+    const b = (trois.length > 1 ? [['p:' + trois[0] + '|' + der, trois.length + ' derniers mois', 'Cumul de ' + trois.map((m) => CT.date.libelleMois(m)).join(', ')]] : [])
+      .concat(trois.map((m) => ['m:' + m, lib(m), 'Facture de ' + CT.date.libelleMois(m)]));
+    const btns = $('#fp-mois'), html = b.map(([v, t, ti]) => `<button type="button" class="pb-btn" data-fmois="${v}" aria-pressed="${v === cur}" title="${esc(ti)}">${esc(t)}</button>`).join('');
     if (btns.innerHTML !== html) btns.innerHTML = html;
-    const sel = $('#fp-autre'), opt = (v, t, sl) => `<option value="${v}"${sl ? ' selected' : ''}>${esc(t)}</option>`;
-    const autres = L.length > trois.length;
-    let h = opt('', autres ? 'Autre mois…' : L.length > 1 ? 'Tous les mois importés' : '1 seul mois importé', !L.some((x) => x.mois === S.mois) || trois.some((x) => x.mois === S.mois));
-    [...new Set(L.map((x) => x.mois.slice(0, 4)))].sort().reverse().forEach((an) => {
-      h += `<optgroup label="${an}">` + L.filter((x) => x.mois.slice(0, 4) === an).reverse().map((x) => opt(x.mois, CT.date.libelleMois(x.mois), x.mois === S.mois && !trois.some((t) => t.mois === S.mois))).join('') + '</optgroup>';
+    const sel = $('#fp-autre'), opt = (v, t) => `<option value="${v}">${esc(t)}</option>`, ans = [...new Set(mois.map((m) => m.slice(0, 4)))].sort().reverse();
+    const janv = mois.filter((m) => m.slice(0, 4) === anDer);
+    let h = opt('', mois.length > 1 ? 'Autre période…' : '1 seul mois importé');
+    if (janv.length > 1) h += opt('p:' + janv[0] + '|' + der, 'Depuis janvier ' + anDer + ' (' + janv.length + ' mois)');
+    if (mois.length > 3) h += opt('p:' + mois[0] + '|' + der, 'Tous les mois importés (' + mois.length + ' mois)');
+    ans.forEach((an) => {
+      const ms = mois.filter((m) => m.slice(0, 4) === an);
+      h += `<optgroup label="${an}">` + (ms.length > 1 ? opt('p:' + ms[0] + '|' + ms[ms.length - 1], 'Année ' + an + ' (' + ms.length + ' mois)') : '') + ms.slice().reverse().map((m) => opt('m:' + m, CT.date.libelleMois(m))).join('') + '</optgroup>';
     });
     if (sel.dataset.html !== h) { sel.innerHTML = h; sel.dataset.html = h; }
-    sel.disabled = L.length < 2;
+    sel.disabled = mois.length < 2;
+    // Le choix reste visible : bouton enfoncé, sinon l'option de la liste
+    sel.value = b.some(([v]) => v === cur) ? '' : ([...sel.options].some((o) => o.value === cur) ? cur : '');
   }
 
   /* Historique des fichiers de facture importés (15 derniers) */
@@ -150,15 +235,18 @@
       }
     }
     if (bilan.length) CT.toast(bilan.join(' · '), 'ok', 12000);
-    oublier(); if (dernier) choisirMois(dernier); else rendre();
+    oublier(); if (dernier) choisirMois('m:' + dernier); else rendre();
   }
   /** Carte « Fichier de facture » en tête du Tableau de bord des factures (même présentation que le Tableau de bord général). */
   function carteImport() {
-    const L = S.moisDispo || [], info = L.find((x) => x.mois === S.mois), choix = '';
+    const L = S.moisDispo || [], choix = '', sel = L.filter((x) => (S.moisSel || [S.mois]).includes(x.mois));
+    // Un mois : son fichier ; plusieurs mois : totaux additionnés et nombre de fichiers
+    const info = !sel.length ? null : sel.length === 1 ? sel[0] : { mois: S.mois, fichiers: sel.length + ' mois cumulés : ' + sel.map((x) => CT.date.libelleMois(x.mois)).join(', '),
+      a_payer: CT.somme(sel, (x) => x.a_payer), arrieres: CT.somme(sel, (x) => x.arrieres), reportees: CT.somme(sel, (x) => x.reportees), non_validees: CT.somme(sel, (x) => x.non_validees) };
     return `<section class="card flat no-print" aria-label="Fichier de facture">
       <div class="file-chip"><div><div class="kpi-label">Fichier de facture (POINT VENTES)</div>
         <strong>${info ? esc(info.fichiers) : 'Aucun fichier importé'}</strong>
-        <div class="kpi-sub">${info ? esc(CT.date.libelleMois(info.mois)) + ' · ' + mn(info.a_payer) + ' à payer · ' + mn(info.arrieres) + ' arriéré(s) · ' + mn(info.reportees) + ' paiement(s) reporté(s) · ' + mn(info.non_validees) + ' non validée(s)'
+        <div class="kpi-sub">${info ? esc(sel.length > 1 ? libSelection(S.moisSel) : CT.date.libelleMois(info.mois)) + ' · ' + mn(info.a_payer) + ' à payer · ' + mn(info.arrieres) + ' arriéré(s) · ' + mn(info.reportees) + ' paiement(s) reporté(s) · ' + mn(info.non_validees) + ' non validée(s)'
           : 'Feuilles lues : « Liste (des) clients » et « Liste des arriérés ». Facturées : lignes A PAYER + arriérés.'}</div>
         <div class="mini-cap" id="fact-import-msg" aria-live="polite"></div></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">${choix}
@@ -179,7 +267,7 @@
   function zoneBase(seg) {
     const d = S[seg], n = (p) => (d ? d.lignes.filter((l) => l.paiement === p).length : 0);
     const arr = d ? d.lignes.filter((l) => l.liste === 'arrieres' && (l.paiement === 'PAYE' || l.paiement === 'REPORT_PAYE')).length : 0;
-    return `<section class="card no-print fact-source"><div class="card-head"><div><h3>Fichier de ${S.mois ? esc(CT.date.libelleMois(S.mois)) : '—'}${d ? ' · ' + esc(d.fichier) : ''}</h3>
+    return `<section class="card no-print fact-source"><div class="card-head"><div><h3>${S.multi ? 'Fichiers de ' + esc(libSelection(S.moisSel)) : 'Fichier de ' + (S.mois ? esc(CT.date.libelleMois(S.mois)) : '—')}${d ? ' · ' + esc(d.fichier) : ''}</h3>
       <p>Facture calculée depuis le fichier « POINT VENTES » importé dans <a class="lien-nu" href="#facturation">Facturation › Tableau de bord</a> (feuilles « Liste des clients » et « Liste des arriérés »). Lignes <b>A PAYER</b> + <b>arriérés</b> = facturées ; <b>PAIEMENT REPORTE</b> = reportées ; <b>VENTE NON VALIDEE</b> = non facturées.</p></div></div>
       <p class="muted">${seg.toUpperCase()} : ${mn(n('PAYE') + n('REPORT_PAYE') - arr)} à payer · ${mn(arr)} arriéré(s) · ${mn(n('REPORTE'))} reportée(s) · ${mn(n('NON_VALIDE'))} non validée(s)</p></section>`;
   }
@@ -220,11 +308,26 @@
     return { aoa, entetes: [f.lignes.length + 4], total: false, filtre: false };
   };
 
+  /* ---------- Cumul : une facture officielle par mois (la facture normalisée est mensuelle) ---------- */
+  function lignesParMois(seg) {
+    return (S.parMois || []).map((x) => { const c = seg === 'b2c' ? x.c2c : x.c2b; return { mois: x.mois, lib: CT.date.libelleMois(x.mois), ventes: c ? (seg === 'b2c' ? c.quantite : c.payees) : 0, ht: c ? c.totalHT : 0, ttc: c ? c.totalTTC : 0, c }; });
+  }
+  function facturesParMoisHTML(seg) {
+    const L = lignesParMois(seg), n = CT.fmt.mnt;
+    return `<p class="muted">La facture normalisée est mensuelle : voici celle de chaque mois de la période (chaque mois a ses propres paliers de primes). « Voir » ouvre la facture complète du mois.</p>
+      <div class="table-wrap"><table class="table-compact"><caption class="sr-only">Factures ${seg.toUpperCase()} par mois</caption>
+        <thead><tr><th scope="col">Mois</th><th scope="col" class="num">Ventes facturées</th><th scope="col" class="num">Total HT</th><th scope="col" class="num">Total TTC</th><th scope="col"></th></tr></thead>
+        <tbody>${L.map((x) => `<tr><td>${esc(x.lib)}</td><td class="num">${mn(x.ventes)}</td><td class="num">${n(x.ht)}</td><td class="num">${n(x.ttc)}</td><td>${x.c ? `<button type="button" class="btn btn-ghost btn-sm" data-fmois="m:${x.mois}"><i class="fa-solid fa-file-invoice" aria-hidden="true"></i>Voir</button>` : '<span class="muted">aucune vente</span>'}</td></tr>`).join('')}</tbody>
+        <tfoot><tr><th scope="row">TOTAL</th><td class="num"><b>${mn(CT.somme(L, (x) => x.ventes))}</b></td><td class="num"><b>${n(CT.somme(L, (x) => x.ht))}</b></td><td class="num"><b>${n(CT.somme(L, (x) => x.ttc))}</b></td><td></td></tr></tfoot>
+      </table></div>`;
+  }
+  const facturesParMoisDef = (seg) => { const L = lignesParMois(seg); return { nom: 'Factures ' + seg.toUpperCase() + ' par mois', cols: [20, 16, 18, 18], aoa: [['Mois', 'Ventes facturées', 'Total HT (FCFA)', 'Total TTC (FCFA)']].concat(L.map((x) => [x.lib, x.ventes, x.ht, x.ttc])) }; };
+
   /* ---------- Facturation B2C ---------- */
   function feuillesB2C() {
     const c = S.c2c, deb = c.debits;
     return [
-      Object.assign({ nom: 'Facture B2C', cols: [12, 52, 14, 10, 18] }, factureDef(F.facture(c, regles()), titreFacture('b2c'))),
+      S.multi ? facturesParMoisDef('b2c') : Object.assign({ nom: 'Facture B2C', cols: [12, 52, 14, 10, 18] }, factureDef(F.facture(c, regles()), titreFacture('b2c'))),
       { nom: 'B2C par login', cols: [26, 14, 10, 10].concat(deb.map(() => 12), [14, 14, 14, 16, 16]),
         aoa: [['Login', 'Équipe', 'Ventes', 'dont reports'].concat(deb, ['One-shot (FCFA)', 'Part vendeur (FCFA)', 'Part partenaire (FCFA)', 'Prime perf. (FCFA)', 'Total vendeur (FCFA)'])]
           .concat(c.logins.map((g) => [g.login, g.equipe, g.ventes, g.reports].concat(deb.map((d) => g.parDebit[d] || 0), [g.oneShot, g.partVendeur, g.partPartenaire, g.primePerf, g.total]))) },
@@ -241,13 +344,13 @@
         { icone: 'fa-coins', titre: 'One-shot', valeur: fc(c.oneShot), aide: 'Vendeurs ' + fc(c.partVendeurs) + ' · Partenaire ' + fc(c.partPartenaire) },
         { icone: 'fa-medal', ton: 'warn', titre: 'Primes', valeur: fc(c.primeVendeurs + c.primePartenaire + c.primeObjectif), aide: 'Vendeurs ' + fc(c.primeVendeurs) + ' · Partenaire ' + fc(c.primePartenaire) + ' · Objectif ' + fc(c.primeObjectif) },
         { icone: 'fa-file-invoice-dollar', ton: 'pos', titre: 'Total HT à facturer', valeur: fc(c.totalHT), aide: 'TTC (TVA 18 %) : ' + fc(c.totalTTC) }])}
-      ${c.objectif == null ? CT.ui.enClair('La <b>prime d\'atteinte de l\'objectif</b> n\'est pas calculée : aucun objectif B2C pour ce mois dans Paramètres › Objectifs.', 'fa-circle-info') : CT.ui.enClair(c.objectifAtteint ? 'Objectif de <b>' + mn(c.objectif) + '</b> ventes atteint : prime de <b>' + fc(c.primeObjectif) + '</b>.' : 'Objectif de <b>' + mn(c.objectif) + '</b> ventes non atteint (' + mn(c.quantite) + ' réalisées) : pas de prime d\'objectif.', c.objectifAtteint ? 'fa-face-smile' : 'fa-triangle-exclamation')}
+      ${c.cumul ? CT.ui.enClair('Cumul de <b>' + esc(libSelection(S.moisSel)) + '</b> : chaque mois est facturé avec ses propres paliers et son objectif, puis les montants sont additionnés. Prime d\'atteinte de l\'objectif cumulée : <b>' + fc(c.primeObjectif) + '</b>.', 'fa-layer-group') : c.objectif == null ? CT.ui.enClair('La <b>prime d\'atteinte de l\'objectif</b> n\'est pas calculée : aucun objectif B2C pour ce mois dans Paramètres › Objectifs.', 'fa-circle-info') : CT.ui.enClair(c.objectifAtteint ? 'Objectif de <b>' + mn(c.objectif) + '</b> ventes atteint : prime de <b>' + fc(c.primeObjectif) + '</b>.' : 'Objectif de <b>' + mn(c.objectif) + '</b> ventes non atteint (' + mn(c.quantite) + ' réalisées) : pas de prime d\'objectif.', c.objectifAtteint ? 'fa-face-smile' : 'fa-triangle-exclamation')}
       ${CT.ui.enClair('Non facturées : <b>' + mn(c.nonPayes.reportes) + '</b> ventes au paiement reporté et <b>' + mn(c.nonPayes.nonValides) + '</b> ventes non validées.', 'fa-hourglass-half')}
       ${params}
-      <section class="card"><div class="card-head"><div><h3>Facture B2C</h3><p>Modèle de la facture normalisée : prix et montants TTC (TVA 18 %), puis ventilation HT / impôt</p></div>${bouton('xl-b2c', 'fa-file-excel', 'Excel')}</div><div id="tb-fb2c"></div></section>
+      <section class="card"><div class="card-head"><div><h3>${S.multi ? 'Factures B2C par mois' : 'Facture B2C'}</h3><p>${S.multi ? esc(libSelection(S.moisSel)) : 'Modèle de la facture normalisée : prix et montants TTC (TVA 18 %), puis ventilation HT / impôt'}</p></div>${bouton('xl-b2c', 'fa-file-excel', 'Excel')}</div><div id="tb-fb2c"></div></section>
       <section class="card"><div class="card-head"><div><h3>Commissions par login</h3><p>Quantités par débit, one-shot (80 % vendeur / 20 % partenaire) et prime de performance</p></div></div><div id="tb-lb2c"></div></section></div>`;
     const deb = c.debits;
-    $('#tb-fb2c').innerHTML = factureHTML(F.facture(c, regles()), titreFacture('b2c'));
+    $('#tb-fb2c').innerHTML = S.multi ? facturesParMoisHTML('b2c') : factureHTML(F.facture(c, regles()), titreFacture('b2c'));
     $('#tb-lb2c').append(creer({ pageSize: 15, recherche: true, caption: 'Commissions B2C par login', lignes: c.logins, triInit: { cle: 'ventes', dir: 'desc' }, classeLigne: (g) => (g.anonymat ? 'row-hors' : ''),
       colonnes: [{ cle: 'login', titre: 'Login', fmt: (v, g) => nomLogin(g.loginKey) + (g.anonymat ? ' (Anonymat)' : '') }, { cle: 'equipe', titre: 'Équipe' }, { cle: 'ventes', titre: 'Ventes', num: true, fmt: mn }]
         .concat(deb.map((d) => ({ cle: 'd_' + d, titre: d.replace('FTTH_HOME_', ''), num: true, tri: (g) => g.parDebit[d] || 0, fmt: (v, g) => mn(g.parDebit ? g.parDebit[d] || 0 : v) })),
@@ -264,12 +367,12 @@
       ${tuiles([
         { icone: 'fa-building', ton: 'pos', titre: 'Ventes payées', valeur: mn(c.payees), aide: 'Dont ' + mn(c.reportsPayes) + ' report(s) payé(s) · ' + mn(c.nonPayes.reportes) + ' paiement(s) reporté(s) non facturé(s)' },
         { icone: 'fa-coins', titre: 'Commissions', valeur: fc(c.commVTB + c.commPVT), aide: 'Vendeurs (80 %) ' + fc(c.commVTB) + ' · Partenaire (20 %) ' + fc(c.commPVT) },
-        { icone: 'fa-medal', ton: 'warn', titre: 'Primes', valeur: fc(c.primeVTB + c.primePVT), aide: 'Vendeurs ' + fc(c.primeVTB) + ' · Partenaire ' + fc(c.primePVT) + ' (' + mn(c.prixPrimePVT) + ' × ' + mn(c.payees) + ')' },
+        { icone: 'fa-medal', ton: 'warn', titre: 'Primes', valeur: fc(c.primeVTB + c.primePVT), aide: 'Vendeurs ' + fc(c.primeVTB) + ' · Partenaire ' + fc(c.primePVT) + (c.prixPrimePVT != null ? ' (' + mn(c.prixPrimePVT) + ' × ' + mn(c.payees) + ')' : ' (calculée mois par mois)') },
         { icone: 'fa-file-invoice-dollar', ton: 'pos', titre: 'Total HT à facturer', valeur: fc(c.totalHT), aide: 'TTC (TVA 18 %) : ' + fc(c.totalTTC) }])}
-      ${CT.ui.enClair('La prime vendeur se calcule sur les ventes payées <b>hors reports</b> ; la prime partenaire sur <b>toutes</b> les ventes payées (reports compris). Mois de vente : <b>' + esc(c.moisVente) + '</b>.', 'fa-circle-info')}
-      <section class="card"><div class="card-head"><div><h3>Facture B2B</h3><p>Modèle de la facture normalisée : one-shot par offre, prime du partenaire, primes de performance des vendeurs (hors reports)</p></div>${bouton('xl-fb2b', 'fa-file-excel', 'Excel')}</div><div id="tb-fb2b"></div></section>
+      ${CT.ui.enClair('La prime vendeur se calcule sur les ventes payées <b>hors reports</b> ; la prime partenaire sur <b>toutes</b> les ventes payées (reports compris). ' + (c.cumul ? 'Cumul de <b>' + esc(c.moisVente) + '</b>, chaque mois calculé avec ses propres paliers.' : 'Mois de vente : <b>' + esc(c.moisVente) + '</b>.'), 'fa-circle-info')}
+      <section class="card"><div class="card-head"><div><h3>${S.multi ? 'Factures B2B par mois' : 'Facture B2B'}</h3><p>${S.multi ? esc(libSelection(S.moisSel)) : 'Modèle de la facture normalisée : one-shot par offre, prime du partenaire, primes de performance des vendeurs (hors reports)'}</p></div>${bouton('xl-fb2b', 'fa-file-excel', 'Excel')}</div><div id="tb-fb2b"></div></section>
       <section class="card"><div class="card-head"><div><h3>Récapitulatif B2B par login</h3><p>Équivalent des onglets COMM et RECAP du fichier de facturation</p></div>${bouton('xl-b2b', 'fa-file-excel', 'Excel')}</div><div id="tb-lb2b"></div></section></div>`;
-    $('#tb-fb2b').innerHTML = factureHTML(F.facture(c, regles()), titreFacture('b2b'));
+    $('#tb-fb2b').innerHTML = S.multi ? facturesParMoisHTML('b2b') : factureHTML(F.facture(c, regles()), titreFacture('b2b'));
     $('#tb-lb2b').append(creer({ pageSize: 15, recherche: true, caption: 'Facturation B2B par login', lignes: c.logins, triInit: { cle: 'ventes', dir: 'desc' }, classeLigne: (g) => (g.anonymat ? 'row-hors' : ''),
       colonnes: [{ cle: 'login', titre: 'Login', fmt: (v, g) => nomLogin(g.loginKey) + (g.anonymat ? ' (Anonymat)' : '') }].concat(c.debits.map((d) => ({ cle: 'd_' + d, titre: d.replace(/^FIBRE_|^FTTH_/, ''), num: true, tri: (g) => g.parDebit[d] || 0, fmt: (v, g) => mn(g.parDebit ? g.parDebit[d] || 0 : v) })),
         [{ cle: 'ventes', titre: 'Ventes', num: true, fmt: mn }, { cle: 'reports', titre: 'dont reports', num: true, fmt: mn }, { cle: 'commVTB', titre: 'Comm. vendeur (FCFA)', num: true, fmt: CT.fmt.mnt }, { cle: 'primeVTB', titre: 'Prime vendeur (FCFA)', num: true, fmt: CT.fmt.mnt }, { cle: 'totalVTB', titre: 'Total vendeur HT (FCFA)', num: true, html: true, fmt: (v) => '<b>' + CT.fmt.mnt(v) + '</b>' }, { cle: 'commPVT', titre: 'Comm. partenaire (FCFA)', num: true, fmt: CT.fmt.mnt }]),
@@ -278,7 +381,7 @@
   function feuillesB2B() {
     const c = S.c2b;
     return [
-      Object.assign({ nom: 'Facture B2B', cols: [12, 52, 14, 10, 18] }, factureDef(F.facture(c, regles()), titreFacture('b2b'))),
+      S.multi ? facturesParMoisDef('b2b') : Object.assign({ nom: 'Facture B2B', cols: [12, 52, 14, 10, 18] }, factureDef(F.facture(c, regles()), titreFacture('b2b'))),
       { nom: 'RECAP B2B', cols: [34, 18], aoa: [['Rubrique', 'Montant HT (FCFA)'], ['Ventes payées', c.payees], ['dont reports payés', c.reportsPayes], ['Commission vendeur', c.commVTB], ['Prime vendeur', c.primeVTB], ['Commission partenaire', c.commPVT], ['Prime partenaire (' + mn(c.prixPrimePVT) + ' × ' + mn(c.payees) + ')', c.primePVT], ['Total HT', c.totalHT], ['TVA 18 %', c.tva], ['Total TTC', c.totalTTC]], total: false },
       { nom: 'COMM B2B', cols: [26].concat(c.debits.map(() => 14), [10, 12, 16, 16, 18, 18]),
         aoa: [['Login'].concat(c.debits, ['Ventes', 'dont reports', 'Comm. vendeur (FCFA)', 'Prime vendeur (FCFA)', 'Total vendeur HT (FCFA)', 'Comm. partenaire (FCFA)'])]
@@ -401,7 +504,7 @@
     r.netRgz = r.partRgzB2C + r.partRgzB2B + r.primePartB2C + r.primePartB2B + r.primeObjectif; r.vendeurs = r.vendeursB2C + r.vendeursB2B;
     return r;
   }
-  const moisFact = () => (S.mois ? CT.date.libelleMois(S.mois) : '');
+  const moisFact = () => (S.multi ? libSelection(S.moisSel) : S.mois ? CT.date.libelleMois(S.mois) : '');
   const deMois = (t) => (/^[aeiouyhâ]/i.test(t) ? 'd\'' : 'de ') + t.charAt(0).toLowerCase() + t.slice(1);   // « d'octobre 2026 », « de septembre 2026 »
 
   function vueDash() {
@@ -415,7 +518,7 @@
     const r = synthese(c, d), A = CT.analyse, pr = CT.etat.prioritaire;
     root.innerHTML = `<div class="stack">
       ${carteImport()}
-      ${CT.ui.enClair('Factures de ' + esc(moisFact()) + ', calculées depuis le fichier « POINT VENTES » importé (lignes A PAYER + arriérés) : mêmes montants que les pages Facture B2C et Facture B2B.', 'fa-circle-info')}
+      ${CT.ui.enClair(S.multi ? 'Cumul de <b>' + esc(libSelection(S.moisSel)) + '</b> : chaque mois est facturé avec ses propres paliers et son objectif, puis les montants sont additionnés (mêmes règles que les pages Facture B2C et Facture B2B).' : 'Factures de ' + esc(moisFact()) + ', calculées depuis le fichier « POINT VENTES » importé (lignes A PAYER + arriérés) : mêmes montants que les pages Facture B2C et Facture B2B.', 'fa-circle-info')}
       <div class="grid-kpi">
         ${A.kpi('fa-file-invoice-dollar', 'pos', 'Total à facturer TTC', fc(r.ttc), 'HT ' + fc(r.ht) + ' · TVA 18 % ' + fc(r.tva))}
         ${A.kpi('fa-house-signal', 'info', 'Facture B2C (HT)', fc(r.htB2C), mn(r.ventesB2C) + ' ventes facturées')}
@@ -429,7 +532,15 @@
       <div class="grid-2">
         ${A.carte('fd-b2c', 'Détail B2C', esc(moisFact()), '<div id="fd-t-b2c"></div>')}
         ${A.carte('fd-b2b', 'Détail B2B', esc(moisFact()), '<div id="fd-t-b2b"></div>')}</div>
+      ${S.multi ? A.carte('fd-mois', 'Factures par mois', 'Chaque mois de la période · la loupe ouvre le mois seul', '<div id="fd-t-mois"></div>') : ''}
       <div class="grid-3-1">${A.carte('fd-net', 'Rémunération nette ' + esc(pr), 'Facture HT = reversé aux vendeurs + net ' + esc(pr), '<div id="fd-t-net"></div>')}${carteHistorique()}</div></div>`;
+    if (S.multi) {
+      const lm = S.parMois.map((x) => Object.assign({ cle: x.mois, lib: CT.date.libelleMois(x.mois) }, synthese(x.c2c, x.c2b)));
+      $('#fd-t-mois').append(creer({ pageSize: 0, caption: 'Factures par mois', lignes: lm, colonnes: [{ cle: 'lib', titre: 'Mois' }, { cle: 'ventesB2C', titre: 'Ventes B2C', num: true, fmt: mn }, { cle: 'ventesB2B', titre: 'Ventes B2B', num: true, fmt: mn },
+        { cle: 'reportes', titre: 'Reportées', num: true, fmt: mn }, { cle: 'ht', titre: 'Facture HT (FCFA)', num: true, fmt: CT.fmt.mnt }, { cle: 'ttc', titre: 'TTC (FCFA)', num: true, fmt: CT.fmt.mnt }, { cle: 'vendeurs', titre: 'Vendeurs (FCFA)', num: true, fmt: CT.fmt.mnt },
+        { cle: 'netRgz', titre: 'Net ' + pr + ' (FCFA)', num: true, fmt: CT.fmt.mnt }, { cle: 'voir', titre: '', html: true, tri: false, fmt: (v, x) => `<button type="button" class="btn btn-ghost btn-sm btn-icone" data-fmois="m:${x.cle}" title="Voir la facture de ${esc(x.lib)}" aria-label="Voir la facture de ${esc(x.lib)}"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i></button>` }],
+        pied: { lib: 'TOTAL', ventesB2C: r.ventesB2C, ventesB2B: r.ventesB2B, reportes: r.reportes, ht: r.ht, ttc: r.ttc, vendeurs: r.vendeurs, netRgz: r.netRgz } }));
+    }
     const t = (id, l) => $(id).append(creer({ pageSize: 0, caption: id, lignes: l.filter((x) => x.m || x.toujours), colonnes: [{ cle: 'r', titre: 'Rubrique' }, { cle: 'm', titre: 'Montant HT (FCFA)', num: true, fmt: CT.fmt.mnt }], pied: { r: 'TOTAL HT', m: CT.somme(l, (x) => x.m) } }));
     t('#fd-t-b2c', [{ r: 'One-shot (' + mn(r.ventesB2C) + ' ventes)', m: r.oneShotB2C, toujours: 1 }, { r: 'Primes de performance vendeurs', m: r.primesVendB2C }, { r: 'Prime de performance partenaire', m: r.primePartB2C }, { r: 'Prime d\'atteinte de l\'objectif', m: r.primeObjectif }]);
     t('#fd-t-b2b', [{ r: 'One-shot (' + mn(r.ventesB2B) + ' ventes)', m: r.oneShotB2B, toujours: 1 }, { r: 'Primes vendeurs (hors reports)', m: r.primesVendB2B }, { r: 'Prime partenaire', m: r.primePartB2B }]);
@@ -452,7 +563,7 @@
     let liste; try { liste = await listeMois(); } catch (er) { root.innerHTML = vide2('Lecture impossible : ' + esc(er.message)); return; }
     if (!liste.length) { root.innerHTML = vide2('Importez le fichier « POINT VENTES » du mois dans Facturation › Tableau de bord.'); return; }
     const A = CT.analyse, AC = CT.analyseCalc, pr = CT.etat.prioritaire;
-    const lignes = await Promise.all(liste.map(async (x) => {
+    const lignes = await Promise.all(liste.filter((x) => !S.multi || S.moisSel.includes(x.mois)).map(async (x) => {
       const c = x.mois, L = convertir(await lignesMois(c), c);
       const o = regles(c), r = synthese(L.b2c.length ? F.calculB2C(L.b2c, o) : null, L.b2b.length ? F.calculB2B(L.b2b, o) : null)   /* objectif du mois c */, obj = A.paramsMois(c).t.mois;
       return Object.assign(r, { cle: c, lib: AC.libMois(c), enCours: false, objectif: obj, tro: obj ? r.ventes / obj : null, mixB2B: r.ventes ? r.ventesB2B / r.ventes : null });
@@ -461,7 +572,7 @@
     lignes.forEach((x, i) => { const p = lignes[i - 1]; x.evolHT = p && p.ht ? (x.ht - p.ht) / p.ht : null; x.evolV = p && p.ventes ? (x.ventes - p.ventes) / p.ventes : null; });
     const der = lignes[lignes.length - 1], ev = (x) => (x == null ? 'premier mois importé' : (x >= 0 ? '+' : '') + pcx(x, 0) + ' vs mois précédent');
     root.innerHTML = `<div class="stack">
-      ${CT.ui.enClair('Facture de chaque mois importé (fichiers « POINT VENTES » de Facturation › Tableau de bord), même règle que les factures : lignes A PAYER + arriérés. Objectif = Paramètres › Objectifs du mois.', 'fa-circle-info')}
+      ${CT.ui.enClair((S.multi ? 'Mois de la période ' + esc(libSelection(S.moisSel)) : 'Tous les mois importés (choisissez « 3 derniers mois », « Depuis janvier »… en haut pour restreindre)') + ' — fichiers « POINT VENTES », même règle que les factures : lignes A PAYER + arriérés. Objectif = Paramètres › Objectifs du mois.', 'fa-circle-info')}
       <div class="grid-kpi">
         ${A.kpi('fa-file-invoice-dollar', 'pos', 'Facture HT — ' + esc(der.lib), fc(der.ht), ev(der.evolHT))}
         ${A.kpi('fa-cart-shopping', 'info', 'Ventes facturées', mn(der.ventes), ev(der.evolV))}
@@ -488,31 +599,37 @@
     const sv = paliers[i + 1];
     return { prime: paliers[i][1], seuil: paliers[i][0], lib: i === 0 ? 'Sans prime (< ' + paliers[1][0] + ')' : paliers[i][0] + (sv ? '–' + (sv[0] - 1) : '+') + ' ventes', manque: sv ? sv[0] - n : 0, primeSuivante: sv ? sv[1] : null };
   }
-  function agentsFactures() {
+  function agentsFactures(c2c, c2b) {
+    if (arguments.length === 0) { c2c = S.c2c; c2b = S.c2b; }
     const R = F.REGLES, m = new Map(), get = (g) => { let a = m.get(g.loginKey); if (!a) m.set(g.loginKey, (a = { loginKey: g.loginKey, login: g.login, equipe: g.equipe || '', anonymat: g.anonymat, b2c: 0, b2b: 0, b2bHorsReports: 0, primeB2C: 0, primeB2B: 0, commission: 0 })); return a; };
-    (S.c2c ? S.c2c.logins : []).forEach((g) => { const a = get(g); a.b2c = g.ventes; a.primeB2C = g.primePerf; a.commission += g.partVendeur; });
-    (S.c2b ? S.c2b.logins : []).forEach((g) => { const a = get(g); a.b2b = g.ventes; a.b2bHorsReports = g.ventes - g.reports; a.primeB2B = g.primeVTB; a.commission += g.commVTB; });
+    (c2c ? c2c.logins : []).forEach((g) => { const a = get(g); a.b2c = g.ventes; a.primeB2C = g.primePerf; a.commission += g.partVendeur; });
+    (c2b ? c2b.logins : []).forEach((g) => { const a = get(g); a.b2b = g.ventes; a.b2bHorsReports = g.ventes - g.reports; a.primeB2B = g.primeVTB; a.commission += g.commVTB; });
     return [...m.values()].map((a) => Object.assign(a, { ventes: a.b2c + a.b2b, gain: a.commission + a.primeB2C + a.primeB2B, pC: palier(R.b2c.primeVendeur, a.b2c), pB: palier(R.b2b.primeVendeur, a.b2bHorsReports) })).sort((x, y) => y.gain - x.gain || y.ventes - x.ventes);
   }
+  // Cumul de plusieurs mois : pas de colonnes « palier » (un palier se gagne sur un seul mois)
+  const colsPerf = (cols) => (S.multi ? cols.filter((c) => c.cle !== 'pC' && c.cle !== 'manque') : cols);
   function vuePerf() {
     const root = $('#factperf-content'), ag = agentsFactures(), A = CT.analyse;
     if (!ag.length) { root.innerHTML = vide2('Aucune vente facturée sur ce mois.'); return; }
     const primes = ag.filter((a) => a.primeB2C + a.primeB2B > 0), R = F.REGLES;
-    const distrib = R.b2c.primeVendeur.map((p, i) => ({ lib: palier(R.b2c.primeVendeur, p[0]).lib, prime: p[1], n: ag.filter((a) => palier(R.b2c.primeVendeur, a.b2c).seuil === p[0]).length }));
+    // Cumul : les paliers se jouent mois par mois → la distribution compte chaque agent dans chacun de ses mois (« agents-mois »)
+    const parPalier = (logins) => (seuil) => logins.filter((g) => palier(R.b2c.primeVendeur, g.ventes).seuil === seuil).length;
+    const distrib = R.b2c.primeVendeur.map((p) => ({ lib: palier(R.b2c.primeVendeur, p[0]).lib, prime: p[1],
+      n: S.multi ? CT.somme(S.parMois, (x) => parPalier(x.c2c ? x.c2c.logins : [])(p[0])) : ag.filter((a) => palier(R.b2c.primeVendeur, a.b2c).seuil === p[0]).length }));
     root.innerHTML = `<div class="stack">
-      ${CT.ui.enClair('Agents payés sur les factures ' + esc(deMois(moisFact())) + ' : ventes facturées, commission (80 %, Anonymat 100 %), prime de performance et ventes qui manquent pour le palier suivant.', 'fa-circle-info')}
+      ${CT.ui.enClair(S.multi ? 'Agents payés sur les factures de <b>' + esc(libSelection(S.moisSel)) + '</b> : ventes, commissions et primes additionnées mois par mois (chaque prime de performance est gagnée sur son propre mois).' : 'Agents payés sur les factures ' + esc(deMois(moisFact())) + ' : ventes facturées, commission (80 %, Anonymat 100 %), prime de performance et ventes qui manquent pour le palier suivant.', 'fa-circle-info')}
       <div class="grid-kpi">
         ${A.kpi('fa-users', 'info', 'Agents payés', mn(ag.length), mn(primes.length) + ' avec une prime de performance')}
-        ${A.kpi('fa-trophy', 'pos', 'N°1 du mois', esc(nomLogin(ag[0].loginKey)), mn(ag[0].ventes) + ' ventes · ' + fc(ag[0].gain))}
+        ${A.kpi('fa-trophy', 'pos', S.multi ? 'N°1 de la période' : 'N°1 du mois', esc(nomLogin(ag[0].loginKey)), mn(ag[0].ventes) + ' ventes · ' + fc(ag[0].gain))}
         ${A.kpi('fa-medal', 'warn', 'Primes de performance', fc(CT.somme(ag, (a) => a.primeB2C + a.primeB2B)), 'moyenne ' + fc(primes.length ? CT.somme(primes, (a) => a.primeB2C + a.primeB2B) / primes.length : 0) + ' par agent primé')}
-        ${A.kpi('fa-arrow-up-right-dots', '', 'Proches du palier suivant', mn(ag.filter((a) => a.pC.manque > 0 && a.pC.manque <= 3).length), '3 ventes B2C ou moins à faire')}</div>
+        ${S.multi ? A.kpi('fa-layer-group', '', 'Mois cumulés', mn(S.moisSel.length), esc(libSelection(S.moisSel))) : A.kpi('fa-arrow-up-right-dots', '', 'Proches du palier suivant', mn(ag.filter((a) => a.pC.manque > 0 && a.pC.manque <= 3).length), '3 ventes B2C ou moins à faire')}</div>
       <div class="grid-2">
-        ${A.carte('fp-top', 'Top 10 agents — gains du mois', 'Commission + primes (FCFA)', '<div class="chart-box tall"><canvas id="fp-ch-top" role="img" aria-label="Top agents"></canvas></div>')}
-        ${A.carte('fp-pal', 'Distribution par palier de prime B2C', 'Nombre d\'agents par palier (grille ' + R.b2c.primeVendeur.slice(1).map((p) => p[0] + '+ = ' + CT.fmt.int(p[1])).join(' · ') + ')', '<div class="chart-box tall"><canvas id="fp-ch-pal" role="img" aria-label="Distribution par palier"></canvas></div>')}</div>
-      ${A.carte('fp-tab', 'Classement complet', 'Trié par gain du mois', '<div id="fp-t"></div>')}</div>`;
-    $('#fp-t').append(creer({ pageSize: 20, recherche: true, caption: 'Performance agents', lignes: ag.map((a, i) => Object.assign({ rang: i + 1 }, a)), colonnes: [{ cle: 'rang', titre: 'N°', num: true }, { cle: 'login', titre: 'Agent', fmt: (v, a) => nomLogin(a.loginKey) + (a.anonymat ? ' (Anonymat)' : '') }, { cle: 'equipe', titre: 'Équipe' },
+        ${A.carte('fp-top', 'Top 10 agents — gains ' + (S.multi ? 'de la période' : 'du mois'), 'Commission + primes (FCFA)', '<div class="chart-box tall"><canvas id="fp-ch-top" role="img" aria-label="Top agents"></canvas></div>')}
+        ${A.carte('fp-pal', 'Distribution par palier de prime B2C', (S.multi ? 'Agents-mois par palier : chaque agent compté dans chacun de ses mois' : 'Nombre d\'agents par palier') + ' (grille ' + R.b2c.primeVendeur.slice(1).map((p) => p[0] + '+ = ' + CT.fmt.int(p[1])).join(' · ') + ')', '<div class="chart-box tall"><canvas id="fp-ch-pal" role="img" aria-label="Distribution par palier"></canvas></div>')}</div>
+      ${A.carte('fp-tab', 'Classement complet', 'Trié par gain ' + (S.multi ? 'de la période' : 'du mois'), '<div id="fp-t"></div>')}</div>`;
+    $('#fp-t').append(creer({ pageSize: 20, recherche: true, caption: 'Performance agents', lignes: ag.map((a, i) => Object.assign({ rang: i + 1 }, a)), colonnes: colsPerf([{ cle: 'rang', titre: 'N°', num: true }, { cle: 'login', titre: 'Agent', fmt: (v, a) => nomLogin(a.loginKey) + (a.anonymat ? ' (Anonymat)' : '') }, { cle: 'equipe', titre: 'Équipe' },
       { cle: 'b2c', titre: 'B2C', num: true, fmt: mn }, { cle: 'b2b', titre: 'B2B', num: true, fmt: mn }, { cle: 'pC', titre: 'Palier B2C', tri: (a) => a.b2c, fmt: (v) => v.lib }, { cle: 'manque', titre: 'Palier suivant', tri: (a) => a.pC.manque || 999, fmt: (v, a) => (a.pC.manque ? 'encore ' + a.pC.manque + ' vente(s) → ' + CT.fmt.int(a.pC.primeSuivante) : 'palier maximal') },
-      { cle: 'commission', titre: 'Commission (FCFA)', num: true, fmt: CT.fmt.mnt }, { cle: 'primeB2C', titre: 'Prime B2C', num: true, fmt: CT.fmt.mnt }, { cle: 'primeB2B', titre: 'Prime B2B', num: true, fmt: CT.fmt.mnt }, { cle: 'gain', titre: 'Total (FCFA)', num: true, html: true, fmt: (v) => '<b>' + CT.fmt.mnt(v) + '</b>' }],
+      { cle: 'commission', titre: 'Commission (FCFA)', num: true, fmt: CT.fmt.mnt }, { cle: 'primeB2C', titre: 'Prime B2C', num: true, fmt: CT.fmt.mnt }, { cle: 'primeB2B', titre: 'Prime B2B', num: true, fmt: CT.fmt.mnt }, { cle: 'gain', titre: 'Total (FCFA)', num: true, html: true, fmt: (v) => '<b>' + CT.fmt.mnt(v) + '</b>' }]),
       pied: { login: 'TOTAL', b2c: CT.somme(ag, (a) => a.b2c), b2b: CT.somme(ag, (a) => a.b2b), commission: CT.somme(ag, (a) => a.commission), primeB2C: CT.somme(ag, (a) => a.primeB2C), primeB2B: CT.somme(ag, (a) => a.primeB2B), gain: CT.somme(ag, (a) => a.gain) } }));
     const P = A.palette(), top = ag.slice(0, 10);
     A.graphe('fp-ch-top', { type: 'bar', data: { labels: top.map((a) => nomLogin(a.loginKey)), datasets: [{ label: 'Commission', data: top.map((a) => a.commission), backgroundColor: P[0], stack: 'g', borderRadius: 4 }, { label: 'Primes', data: top.map((a) => a.primeB2C + a.primeB2B), backgroundColor: P[2], stack: 'g', borderRadius: 4 }] },
@@ -521,9 +638,9 @@
   }
 
   function vueReco() {
-    const root = $('#factreco-content'), c = S.c2c, d = S.c2b, A = CT.analyse, R = F.REGLES, pr = CT.etat.prioritaire;
+    const root = $('#factreco-content'), der = S.multi ? S.parMois[S.parMois.length - 1] : null, c = der ? der.c2c : S.c2c, d = der ? der.c2b : S.c2b, A = CT.analyse, R = F.REGLES, pr = CT.etat.prioritaire;
     if (!c && !d) { root.innerHTML = vide2('Aucune vente facturée sur ce mois.'); return; }
-    const reco = [], ag = agentsFactures();
+    const reco = [], ag = agentsFactures(c, d);
     // 1. Agents à 3 ventes ou moins du palier B2C suivant (et 2 ventes en B2B)
     const procheC = ag.filter((a) => a.pC.manque > 0 && a.pC.manque <= 3), procheB = ag.filter((a) => a.b2bHorsReports > 0 && a.pB.manque > 0 && a.pB.manque <= 2);
     if (procheC.length) reco.push({ ic: 'fa-arrow-up-right-dots', titre: procheC.length + ' agent(s) à 3 ventes B2C ou moins du palier de prime suivant', gain: CT.somme(procheC, (a) => a.pC.primeSuivante - a.pC.prime),
@@ -546,7 +663,7 @@
     reco.sort((x, y) => y.gain - x.gain); S.reco = reco;
     const tot = CT.somme(reco, (x) => x.gain);
     root.innerHTML = `<div class="stack">
-      ${CT.ui.enClair('Leviers d\'amélioration des gains ' + esc(pr) + ' sur les factures ' + esc(deMois(moisFact())) + ', triés par gain potentiel (montants HT facturables à Celtiis).', 'fa-lightbulb')}
+      ${CT.ui.enClair('Leviers d\'amélioration des gains ' + esc(pr) + ' sur les factures ' + esc(deMois(der ? CT.date.libelleMois(der.mois) : moisFact())) + (der ? ' (dernier mois de la période : les paliers se jouent mois par mois)' : '') + ', triés par gain potentiel (montants HT facturables à Celtiis).', 'fa-lightbulb')}
       <div class="grid-kpi">${A.kpi('fa-sack-dollar', 'pos', 'Gain potentiel identifié', fc(tot), reco.filter((x) => x.gain > 0).length + ' levier(s) chiffré(s)')}</div>
       ${A.carte('fr-liste', 'Leviers d\'amélioration', 'Du plus rentable au moins rentable', `<ul class="alerts">${reco.map((x) => `<li class="alert ${x.gain > 0 ? 'pos' : 'info'}"><span class="alert-ic"><i class="fa-solid ${x.ic}" aria-hidden="true"></i></span><div><strong>${esc(x.titre)}${x.gain > 0 ? ' — +' + esc(fc(x.gain)) : ''}</strong><span>${esc(x.detail)}</span></div></li>`).join('') || '<li class="muted">Aucun levier identifié.</li>'}</ul>`)}</div>`;
   }
@@ -574,7 +691,7 @@
   }
   function clics(e) {
     const b = e.target.closest && e.target.closest('button[id^="xl-"]'); if (!b) return;
-    const mois = (S.mois || CT.etat.cle || new Date().toISOString().slice(0, 7));
+    const mois = S.multi ? S.moisSel[0] + '_au_' + S.moisSel[S.moisSel.length - 1] : (S.mois || CT.etat.cle || new Date().toISOString().slice(0, 7));
     try {
       if (b.id === 'xl-b2c') telecharger('Facturation_B2C_' + mois, feuillesB2C());
       else if (b.id === 'xl-b2b' || b.id === 'xl-fb2b') telecharger('Facturation_B2B_' + mois, feuillesB2B());
@@ -585,7 +702,7 @@
   }
   document.addEventListener('change', evenements);
   document.addEventListener('click', clics);
-  document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('#fp-mois [data-fmois]'); if (b) choisirMois(b.dataset.fmois); });
+  document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-fmois]'); if (b) { choisirMois(b.dataset.fmois); if (!b.closest('#fp-mois')) window.scrollTo({ top: 0 }); } });
 
   /* ---------- Barre d'export (Excel, PDF, CSV, WhatsApp, Gmail, Outlook, Copier) : données de chaque page Facturation ---------- */
   function feuillesReports() {
@@ -600,7 +717,9 @@
       { nom: 'Rémunération nette', cols: [50, 18, 18], total: false, aoa: [['Rubrique', 'Net ' + pr + ' (FCFA)', 'Vendeurs (FCFA)'], ['Part ' + pr + ' des commissions B2C', r.partRgzB2C, ''], ['Part ' + pr + ' des commissions B2B', r.partRgzB2B, ''],
         ['Prime de performance partenaire B2C', r.primePartB2C, ''], ['Prime partenaire B2B', r.primePartB2B, ''], ['Prime d\'atteinte de l\'objectif', r.primeObjectif, ''], ['Reversé aux vendeurs B2C', '', r.vendeursB2C], ['Reversé aux vendeurs B2B', '', r.vendeursB2B],
         ['TOTAL (= facture HT ' + CT.fmt.int(r.ht) + ')', r.netRgz, r.vendeurs]] }]
-      .concat(S.c2c ? feuillesB2C().slice(0, 1) : [], S.c2b ? feuillesB2B().slice(0, 1) : []);
+      .concat(S.multi ? [{ nom: 'Factures par mois', cols: [20, 12, 12, 12, 18, 18, 18, 18], aoa: [['Mois', 'Ventes B2C', 'Ventes B2B', 'Reportées', 'Facture HT (FCFA)', 'TTC (FCFA)', 'Vendeurs (FCFA)', 'Net ' + pr + ' (FCFA)']]
+          .concat(S.parMois.map((x) => { const y = synthese(x.c2c, x.c2b); return [CT.date.libelleMois(x.mois), y.ventesB2C, y.ventesB2B, y.reportes, y.ht, y.ttc, y.vendeurs, y.netRgz]; })) }] : [],
+        S.c2c ? feuillesB2C().slice(0, 1) : [], S.c2b ? feuillesB2B().slice(0, 1) : []);
   }
   function feuillesEvo() {
     const L = S.evo || [], s = (k) => CT.somme(L, (x) => x[k] || 0);
@@ -610,6 +729,11 @@
   }
   function feuillesPerf() {
     const ag = agentsFactures(), R = F.REGLES, s = (k) => CT.somme(ag, (a) => a[k] || 0);
+    const f = feuillesPerfMois(ag, R, s);
+    if (S.multi) { f[0].aoa = f[0].aoa.map((r) => r.filter((v, i) => i !== 5 && i !== 6)); f[0].cols = f[0].cols.filter((v, i) => i !== 5 && i !== 6); f[0].nom = 'Performance agents (cumul)'; return f.slice(0, 1); }
+    return f;
+  }
+  function feuillesPerfMois(ag, R, s) {
     return [{ nom: 'Performance agents', cols: [6, 26, 16, 8, 8, 18, 30, 16, 14, 14, 16], total: false, aoa: [['N°', 'Agent', 'Équipe', 'B2C', 'B2B', 'Palier B2C', 'Palier suivant', 'Commission (FCFA)', 'Prime B2C (FCFA)', 'Prime B2B (FCFA)', 'Total (FCFA)']]
         .concat(ag.map((a, i) => [i + 1, a.login + (a.anonymat ? ' (Anonymat)' : ''), a.equipe, a.b2c, a.b2b, a.pC.lib, a.pC.manque ? 'encore ' + a.pC.manque + ' vente(s) → ' + CT.fmt.int(a.pC.primeSuivante) : 'palier maximal', a.commission, a.primeB2C, a.primeB2B, a.gain]),
           [['TOTAL', '', '', s('b2c'), s('b2b'), '', '', s('commission'), s('primeB2C'), s('primeB2B'), s('gain')]]) },
