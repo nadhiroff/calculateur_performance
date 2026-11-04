@@ -71,6 +71,23 @@ console.log('\nB2C — fichier « POINT VENTES FTTH RGZ SEPTEMBRE 2026 B2C.xlsx 
     assert.strictEqual(F.calculB2C(lignes, { regles: { b2c: { objectif: 1000 } } }).primeObjectif, 500000);
     assert.strictEqual(F.calculB2C(lignes, { regles: { b2c: { objectif: 1200 } } }).primeObjectif, 0);
   });
+  test('prime indexée objectif FTTH : ventes du mois SANS les arriérés ; tranches 300 / 600 / 1000 ; objectif non atteint = 0', () => {
+    const L = (n, arr) => Array.from({ length: n + arr }, (_, i) => ({ login: 'a.ftth', loginKey: 'a', debit: 'FTTH_HOME_50M', jour: '2026-09-10', paiement: i < n ? 'PAYE' : 'REPORT_PAYE' }));
+    const p = (n, arr, obj) => F.calculB2C(L(n, arr), { regles: { b2c: { objectif: obj } } });
+    assert.strictEqual(p(599, 1, 600).primeObjectif, 0);          // 600 facturées dont 1 arriéré : 599 ventes du mois < 600
+    assert.strictEqual(p(600, 0, 600).primeObjectif, 300000);     // objectif atteint, tranche 600-999
+    assert.strictEqual(p(650, 0, 300).primeObjectif, 300000);     // au-delà : montant de la tranche réalisée
+    assert.strictEqual(p(1000, 5, 900).primeObjectif, 500000);
+    assert.strictEqual(p(350, 0, 300).primeObjectif, 200000);
+    assert.strictEqual(p(250, 0, 200).primeObjectif, 0);          // objectif atteint mais moins de 300 ventes : pas de tranche
+    assert.strictEqual(p(1000, 0, null).primeObjectif, 0);        // objectif de l'opérateur non saisi : pas de prime
+    const f = F.facture(p(650, 0, 600));
+    assert.ok(f.lignes.some((l) => /^PRIME PARTENAIRE INDEXÉE AU TAUX D'ATTEINTE OBJECTIF FTTH/.test(l.nom) && l.prixHT === 300000 && l.prixTTC === 354000));
+    assert.ok(!F.facture(p(1000, 0, null)).lignes.some((l) => /INDEXÉE/.test(l.nom)));
+    // place dans la facture : juste après « PRIME DU PARTENAIRE », avant les primes de performance
+    const iPart = f.lignes.findIndex((l) => l.nom === 'PRIME DU PARTENAIRE');
+    assert.ok(iPart >= 0 && /INDEXÉE/.test(f.lignes[iPart + 1].nom) && f.lignes[iPart + 1].n === iPart + 2);
+  });
   test('total HT = one-shot + primes vendeurs + prime partenaire (+ objectif)', () => assert.strictEqual(r.totalHT, r.oneShot + r.primeVendeurs + r.primePartenaire + r.primeObjectif));
   test('Anonymat : one-shot intégral (100 %) pour pvt_rgz_akoffi', () => { const g = r.logins.find((x) => x.loginKey === 'pvt_rgz_akoffi'); assert.ok(g.anonymat); assert.strictEqual(g.partVendeur, g.oneShot); assert.strictEqual(g.partPartenaire, 0); });
   test('commercial standard : 80 % du one-shot', () => { const g = r.logins.find((x) => x.loginKey === 'pvt_rgz_dthibaut'); assert.ok(!g.anonymat); assert.strictEqual(g.partVendeur, Math.round(g.oneShot * 0.8)); });

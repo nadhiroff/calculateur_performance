@@ -407,3 +407,8 @@ details.comparatif[open] > summary { margin-bottom: var(--sp-4); }
 .lien-nu { text-decoration: none; font-weight: 600; }
 .lien-nu:hover, .lien-nu:focus-visible { text-decoration: none; color: var(--primary-700, var(--primary-600)); }
 .card.empty + p.muted { margin-top: var(--sp-4); }
+
+/* Facture B2C : saisie de l'objectif FTTH de l'opérateur */
+.objectif-op { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--sp-3) var(--sp-4); }
+.objectif-op .input { width: 160px; }
+.objectif-op p { flex: 1 1 280px; }

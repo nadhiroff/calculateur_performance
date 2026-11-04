@@ -83,8 +83,11 @@
     /* Facturation Celtiis : fichiers « POINT VENTES » de fin de mois */
     factures: {
       importer: (fichier, mois) => requete('/imports/factures', { method: 'POST', form: fd({ fichier, mois }) }),
+      apercu: (fichier, mois) => requete('/imports/factures', { method: 'POST', form: fd({ fichier, mois, apercu: true }) }),   // lecture seule : rien n'est écrit
       mois: () => requete('/factures/mois'),
       imports: () => requete('/factures/imports'),
+      objectifs: () => requete('/factures/objectifs'),
+      enregistrerObjectif: (mois, objectif) => requete('/factures/objectifs/' + mois, { method: 'PUT', json: { objectif_b2c: objectif } }),
       lignes: (mois) => requete('/factures', { params: { mois } }),
     },
     /* Vue d'ensemble de toute la base (tableau de bord du Directeur) */

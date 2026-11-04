@@ -41,12 +41,43 @@
   }
 
   /* ---------- Paramètres et calculs ---------- */
-  /* Objectif FTTH du mois (prime d'atteinte de l'objectif) : automatiquement l'objectif B2C du mois facturé, Paramètres › Objectifs.
-     Mois sans objectifs propres (objectifs hérités d'un autre mois) : pas de prime d'objectif — on ne juge pas un mois sur l'objectif d'un autre. */
+  /* Objectif FTTH B2C donné chaque mois par l'OPÉRATEUR (saisi dans Facture B2C, gardé en base : table factures_objectifs).
+     Il déclenche la « PRIME PARTENAIRE INDEXÉE AU TAUX D'ATTEINTE OBJECTIF FTTH ». Pas d'objectif saisi pour le mois : facture sans cette prime. */
   function regles(cle) {
-    const m = cle || (CT.etat && CT.etat.cle), P = m && CT.store && CT.store.actifs ? CT.store.actifs(m) : null;
-    const obj = P && !P.herite ? CT.objectifs.totaux(P.objectifs).b2c : 0;
-    return { regles: { b2c: { objectif: obj > 0 ? obj : null } } };
+    const m = cle || S.mois, obj = m && S.objOp ? S.objOp[m] : null;
+    return { regles: { b2c: { objectif: obj != null && obj > 0 ? obj : null } } };
+  }
+  async function objectifsOperateur(forcer) {
+    if (!S.objOp || forcer) { try { S.objOp = ((await CT.api.factures.objectifs()) || {}).objectifs || {}; } catch (e) { S.objOp = S.objOp || {}; } }
+    return S.objOp;
+  }
+  async function enregistrerObjectif(mois, valeur) {
+    const v = String(valeur == null ? '' : valeur).replace(/\s/g, '');
+    if (v !== '' && !/^\d+$/.test(v)) { CT.toast('Saisissez un nombre entier de ventes (ex. 1000), ou laissez vide pour retirer l\'objectif.', 'err', 7000); return; }
+    try {
+      await CT.api.factures.enregistrerObjectif(mois, v === '' ? null : +v);
+      S.objOp = Object.assign({}, S.objOp, { [mois]: v === '' ? null : +v }); if (v === '') delete S.objOp[mois];
+      CT.toast(v === '' ? 'Objectif de ' + CT.date.libelleMois(mois) + ' retiré : facture sans la prime indexée.' : 'Objectif de l\'opérateur pour ' + CT.date.libelleMois(mois) + ' : ' + CT.fmt.int(+v) + ' ventes. Facture recalculée.', 'ok', 6000);
+      S.cleBase = null; rendre();
+    } catch (e) { CT.toast('Enregistrement impossible : ' + e.message, 'err', 9000); }
+  }
+  /** Carte de saisie de l'objectif de l'opérateur (page Facture B2C) ; en cumul : objectifs de chaque mois, saisie sur un mois seul. */
+  function carteObjectif() {
+    const grille = F.REGLES.b2c.primeObjectif.map((p, i, a) => (a[i + 1] ? p[0] + ' à ' + (a[i + 1][0] - 1) : p[0] + ' et plus') + ' ventes : ' + CT.fmt.int(p[1]) + ' HT').join(' · ');
+    if (S.multi) {
+      return `<section class="card no-print"><div class="card-head"><div><h3>Objectif FTTH de l'opérateur</h3><p>Prime partenaire indexée au taux d'atteinte : ${esc(grille)}</p></div></div>
+        <p class="muted">${S.parMois.map((x) => esc(CT.date.libelleMois(x.mois)) + ' : <b>' + (S.objOp[x.mois] ? mn(S.objOp[x.mois]) + ' ventes' : 'non saisi') + '</b>').join(' · ')}. Choisissez un mois seul en haut pour saisir ou modifier son objectif.</p></section>`;
+    }
+    const c = S.c2c, o = S.objOp[S.mois];
+    const etat = !o ? 'Objectif non saisi : la facture est faite <b>sans</b> la prime indexée.'
+      : c && c.objectifAtteint ? 'Objectif atteint : <b>' + mn(c.ventesObjectif) + '</b> ventes du mois pour un objectif de <b>' + mn(o) + '</b> → prime de <b>' + fc(c.primeObjectif) + '</b> HT.' + (c.primeObjectif ? '' : ' (moins de 300 ventes : pas de tranche)')
+        : 'Objectif non atteint : <b>' + mn(c ? c.ventesObjectif : 0) + '</b> ventes du mois pour un objectif de <b>' + mn(o) + '</b> → pas de prime.';
+    return `<section class="card no-print"><div class="card-head"><div><h3>Objectif FTTH de l'opérateur — ${esc(CT.date.libelleMois(S.mois))}</h3>
+        <p>Donné chaque mois par l'opérateur. Ventes du mois (A PAYER, sans les arriérés) ≥ objectif → prime partenaire indexée : ${esc(grille)}. Gardé en base pour ce mois.</p></div></div>
+      <form class="objectif-op" id="fo-obj" data-mois="${S.mois}"><label class="field" style="margin:0"><span class="kpi-label">Objectif B2C (ventes)</span>
+        <input class="input input-sm" id="fo-val" type="number" min="0" step="1" inputmode="numeric" placeholder="ex. 1000" value="${o != null ? o : ''}"></label>
+        <button class="btn btn-primary btn-sm" type="submit"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>Enregistrer</button>
+        <p class="muted" style="margin:0">${etat}</p></form></section>`;
   }
   function recalculer() {
     if (S.multi) return;   // plusieurs mois : résultats déjà calculés mois par mois puis additionnés (depuisBase)
@@ -97,7 +128,7 @@
   }
   async function depuisBase() {
     if (S.test) return;   // données de test chargées par CT.factUI.charger
-    const liste = await listeMois();
+    const liste = await listeMois(); await objectifsOperateur();
     if (!liste.length) { S.mois = null; S.moisSel = []; S.multi = false; S.parMois = []; S.b2c = S.b2b = null; S.cleBase = null; recalculer(); return; }
     const dispo = liste.map((x) => x.mois), sel = moisChoisis(dispo), cle = sel.join(',');
     if (S.cleBase === cle) return;
@@ -183,8 +214,10 @@
     zone.hidden = !visible || !L.length; if (zone.hidden) return;
     const mois = L.map((x) => x.mois), der = mois[mois.length - 1], trois = mois.slice(-3), anDer = der.slice(0, 4);
     const cur = S.multi ? 'p:' + S.moisSel[0] + '|' + S.moisSel[S.moisSel.length - 1] : 'm:' + S.mois;
+    // Mots entiers, sans abréviation ; l'année n'est écrite que sur le premier mois de chaque année (« Septembre 2026 · Octobre · Janvier 2027 »),
+    // et pas du tout si les trois mois sont de l'année en cours
     const annees = new Set(trois.map((m) => m.slice(0, 4))).size > 1 || anDer !== String(new Date().getFullYear());
-    const lib = (m) => { const l = CT.date.libelleMois(m); return annees ? l : l.split(' ')[0]; };
+    const lib = (m) => { const l = CT.date.libelleMois(m), i = trois.indexOf(m); return annees && (i <= 0 || trois[i - 1].slice(0, 4) !== m.slice(0, 4)) ? l : l.split(' ')[0]; };
     const b = (trois.length > 1 ? [['p:' + trois[0] + '|' + der, trois.length + ' derniers mois', 'Cumul de ' + trois.map((m) => CT.date.libelleMois(m)).join(', ')]] : [])
       .concat(trois.map((m) => ['m:' + m, lib(m), 'Facture de ' + CT.date.libelleMois(m)]));
     const btns = $('#fp-mois'), html = b.map(([v, t, ti]) => `<button type="button" class="pb-btn" data-fmois="${v}" aria-pressed="${v === cur}" title="${esc(ti)}">${esc(t)}</button>`).join('');
@@ -211,25 +244,56 @@
   }
   const depuis = (iso) => { const d = (Date.now() - new Date(iso).getTime()) / 60000; return d < 1 ? 'à l\'instant' : d < 60 ? 'il y a ' + Math.round(d) + ' min' : d < 1440 ? 'il y a ' + Math.round(d / 60) + ' h' : 'le ' + new Date(iso).toLocaleDateString('fr-FR'); };
   function carteHistorique() {
-    const H = S.historique || [], lib = { ok: ['fa-check', '', 'Réussi', 'badge-pos'], echec: ['fa-xmark', 'neg', 'Échec', 'badge-neg'], en_cours: ['fa-spinner', 'info', 'En cours', 'badge-info'] };
+    const H = S.historique || [], lib = { ok: ['fa-check', '', 'Réussi', 'badge-pos'], modifie: ['fa-pen', 'warn', 'Modifié', 'badge-warn'], echec: ['fa-xmark', 'neg', 'Échec', 'badge-neg'], en_cours: ['fa-spinner', 'info', 'En cours', 'badge-info'] };
     return `<section class="card"><div class="card-head"><div><h3>Historique des fichiers</h3><p>Fichiers de facture importés${H.length > 6 ? ' · ' + H.length + ' derniers, faites défiler' : ''}</p></div></div>
-      <ul class="activity">${H.map((i) => { const [ic, cls, txt, badge] = lib[i.statut] || lib.en_cours;
-        const det = i.statut === 'ok' ? (i.mois ? CT.date.libelleMois(i.mois) + ' · ' : '') + mn(i.facturees || 0) + ' facturée(s)' + (i.arrieres ? ' dont ' + mn(i.arrieres) + ' arriéré(s)' : '') + ' · ' + mn(i.reportees || 0) + ' reportée(s)' + (i.remplacees ? ' · remplace l\'import précédent' : '') : (i.erreur || '');
+      <ul class="activity">${H.map((i) => { const [ic, cls, txt, badge] = lib[i.statut === 'ok' && i.remplacees ? 'modifie' : i.statut] || lib.en_cours;   // un mois déjà importé puis remplacé : « Modifié »
+        const ch = i.changements, detCh = ch ? ' · mis à jour : ' + [[ch.nouvelles, 'nouvelle(s)'], [ch.modifiees, 'modifiée(s)'], [ch.retirees, 'retirée(s)']].filter((x) => x[0]).map((x) => mn(x[0]) + ' ' + x[1]).join(', ') + (ch.nouvelles || ch.modifiees || ch.retirees ? '' : 'aucun changement') : ' · remplace l\'import précédent';
+        const det = i.statut === 'ok' ? (i.mois ? CT.date.libelleMois(i.mois) + ' · ' : '') + mn(i.facturees || 0) + ' facturée(s)' + (i.arrieres ? ' dont ' + mn(i.arrieres) + ' arriéré(s)' : '') + ' · ' + mn(i.reportees || 0) + ' reportée(s)' + (i.remplacees ? detCh : '') : (i.erreur || '');
         return `<li><span class="ic ${cls}" aria-hidden="true"><i class="fa-solid ${ic}"></i></span><div><div class="nm" title="${esc(i.nom)}">${esc(i.nom)}</div><small title="${esc(det + (i.feuilles && i.feuilles.length ? ' · feuilles : ' + i.feuilles.join(', ') : ''))}">${esc(det)}</small></div><div style="text-align:right"><span class="badge ${badge}">${txt}</span><small>${i.date ? depuis(i.date) : ''}</small></div></li>`; }).join('') || '<li class="muted">Aucun fichier importé.</li>'}</ul></section>`;
   }
 
   /* ---------- Import des fichiers « POINT VENTES » (bouton du Tableau de bord des factures, plusieurs fichiers possibles) ---------- */
+  /* Fenêtre « Contrôle avant import » (même présentation que le Tableau de bord général) : chiffres du fichier et, si le mois
+     est déjà en base, ce qui va changer. Renvoie true seulement si l'utilisateur confirme ; rien n'est écrit avant. */
+  function controleAvantImport(a) {
+    const s = a.stats, c = a.comparaison, mois = CT.date.libelleMois(s.mois), dejaLa = c.existantes > 0;
+    const it = (niv, ic, titre, detail) => `<li class="qc-item ${niv}"><span class="qc-ic" aria-hidden="true"><i class="fa-solid ${ic}"></i></span><div><strong>${titre}</strong>${detail ? `<small>${detail}</small>` : ''}</div></li>`;
+    const debits = Object.entries(s.par_debit || {}).map(([d, n]) => esc(d) + ' : ' + mn(n)).join(' · ');
+    const items = [
+      it('ok', 'fa-calendar', 'Mois facturé : ' + esc(mois), 'Feuille(s) lue(s) : ' + s.feuilles.map((x) => '« ' + esc(x.nom) + ' » (' + mn(x.lignes) + ' lignes)').join(', ')
+        + (s.feuilles_ignorees && s.feuilles_ignorees.length ? ' · ignorée(s) : ' + s.feuilles_ignorees.map(esc).join(', ') : '')),
+      it('ok', 'fa-file-invoice-dollar', 'Facturées : ' + mn(s.facturees) + ' (' + mn(s.a_payer) + ' à payer' + (s.arrieres ? ' + ' + mn(s.arrieres) + ' arriéré(s)' : '') + ')', debits + (s.logins ? ' · ' + mn(s.logins) + ' vendeur(s)' : '')),
+      it(s.reportees ? 'warn' : 'ok', 'fa-clock', 'Paiements reportés : ' + mn(s.reportees), 'Non facturés ce mois.'),
+      it(s.non_validees ? 'warn' : 'ok', 'fa-ban', 'Ventes non validées : ' + mn(s.non_validees), 'Non facturées.'),
+    ].concat((s.avertissements || []).map((w) => it('warn', 'fa-exclamation', 'Attention', esc(w))));
+    if (c.identique) items.push(it('ok', 'fa-equals', esc(mois) + ' déjà importé : fichier identique à la base', 'Aucune vente nouvelle, modifiée ou retirée : rien ne sera réécrit.'));
+    else if (dejaLa) items.push(it('warn', 'fa-pen', esc(mois) + ' déjà en base (' + mn(c.existantes) + ' lignes' + (c.fichiers_existants.length ? ', ' + c.fichiers_existants.map((x) => '« ' + esc(x) + ' »').join(', ') : '') + ') : mise à jour',
+      mn(c.nouvelles) + ' nouvelle(s) · ' + mn(c.modifiees) + ' modifiée(s) · ' + mn(c.retirees) + ' retirée(s) · ' + mn(c.inchangees) + ' inchangée(s). Les lignes de ce mois sont remplacées : aucun doublon.'
+        + (c.exemples.length ? '<br>Exemples : ' + c.exemples.map(esc).join(' ; ') : '')));
+    else items.push(it('ok', 'fa-plus', 'Nouveau mois : ' + esc(mois) + ' n\'est pas encore en base', mn(s.lignes) + ' lignes seront enregistrées.'));
+    const corps = `<p class="muted" style="margin-bottom:12px">${esc(a.fichier)} · ${mn(s.lignes)} lignes exploitables. Rien n'est enregistré tant que vous n'avez pas confirmé.</p><ul class="qc-list">${items.join('')}</ul>`;
+    return CT.modal({ titre: 'Contrôle avant import — ' + mois, corps,
+      actions: c.identique ? [{ label: 'Fermer', valeur: false, variante: 'primary' }]
+        : [{ label: 'Annuler', valeur: false }, { label: dejaLa ? 'Mettre à jour ' + mois : 'Enregistrer ' + mois, valeur: true, variante: 'primary' }] });
+  }
   async function importerFactures(fichiers) {
     const bilan = []; let dernier = null;
     for (const f of fichiers) {
       if (!/\.(xlsx|xls)$/i.test(f.name)) { CT.toast('« ' + f.name + ' » refusé : seuls les fichiers Excel (.xlsx, .xls) sont acceptés.', 'err', 8000); continue; }
-      const info = $('#fact-import-msg'); if (info) info.textContent = 'Lecture et enregistrement de « ' + f.name + ' »…';
+      const info = $('#fact-import-msg'); if (info) info.textContent = 'Lecture de « ' + f.name + ' »…';
       try {
-        const r = await CT.api.factures.importer(f);
+        const a = await CT.api.factures.apercu(f);
+        if (info) info.textContent = '';
+        if (!(await controleAvantImport(a))) {
+          CT.toast(a.comparaison.identique ? '« ' + f.name + ' » est identique à la base : rien n\'a été modifié.' : 'Import de « ' + f.name + ' » annulé : rien n\'a été modifié.', 'info', 5000);
+          continue;
+        }
+        if (info) info.textContent = 'Enregistrement de « ' + f.name + ' »…';
+        const r = await CT.api.factures.importer(f, a.stats.mois);
         bilan.push(r.message); dernier = r.stats.mois;
-        (r.stats.avertissements || []).forEach((a) => CT.toast(a, 'warn', 9000));
+        (r.stats.avertissements || []).forEach((w) => CT.toast(w, 'warn', 9000));
       } catch (e) {
-        CT.modal({ titre: 'Fichier non enregistré', actions: [{ label: 'Compris', valeur: true, variante: 'primary' }],
+        await CT.modal({ titre: 'Fichier non enregistré', actions: [{ label: 'Compris', valeur: true, variante: 'primary' }],
           corps: '<div class="alert neg"><span class="alert-ic">' + CT.icone('critique') + '</span><div><strong>' + esc(f.name) + '</strong><span>' + esc(e.message) + '</span></div></div>'
             + '<p class="muted" style="margin-top:12px">Rien n\'a été enregistré pour ce fichier : la base est restée dans son état précédent.</p>' });
       }
@@ -344,7 +408,8 @@
         { icone: 'fa-coins', titre: 'One-shot', valeur: fc(c.oneShot), aide: 'Vendeurs ' + fc(c.partVendeurs) + ' · Partenaire ' + fc(c.partPartenaire) },
         { icone: 'fa-medal', ton: 'warn', titre: 'Primes', valeur: fc(c.primeVendeurs + c.primePartenaire + c.primeObjectif), aide: 'Vendeurs ' + fc(c.primeVendeurs) + ' · Partenaire ' + fc(c.primePartenaire) + ' · Objectif ' + fc(c.primeObjectif) },
         { icone: 'fa-file-invoice-dollar', ton: 'pos', titre: 'Total HT à facturer', valeur: fc(c.totalHT), aide: 'TTC (TVA 18 %) : ' + fc(c.totalTTC) }])}
-      ${c.cumul ? CT.ui.enClair('Cumul de <b>' + esc(libSelection(S.moisSel)) + '</b> : chaque mois est facturé avec ses propres paliers et son objectif, puis les montants sont additionnés. Prime d\'atteinte de l\'objectif cumulée : <b>' + fc(c.primeObjectif) + '</b>.', 'fa-layer-group') : c.objectif == null ? CT.ui.enClair('La <b>prime d\'atteinte de l\'objectif</b> n\'est pas calculée : aucun objectif B2C pour ce mois dans Paramètres › Objectifs.', 'fa-circle-info') : CT.ui.enClair(c.objectifAtteint ? 'Objectif de <b>' + mn(c.objectif) + '</b> ventes atteint : prime de <b>' + fc(c.primeObjectif) + '</b>.' : 'Objectif de <b>' + mn(c.objectif) + '</b> ventes non atteint (' + mn(c.quantite) + ' réalisées) : pas de prime d\'objectif.', c.objectifAtteint ? 'fa-face-smile' : 'fa-triangle-exclamation')}
+      ${c.cumul ? CT.ui.enClair('Cumul de <b>' + esc(libSelection(S.moisSel)) + '</b> : chaque mois est facturé avec ses propres paliers et son objectif, puis les montants sont additionnés. Prime partenaire indexée (objectif FTTH) cumulée : <b>' + fc(c.primeObjectif) + '</b>.', 'fa-layer-group') : ''}
+      ${carteObjectif()}
       ${CT.ui.enClair('Non facturées : <b>' + mn(c.nonPayes.reportes) + '</b> ventes au paiement reporté et <b>' + mn(c.nonPayes.nonValides) + '</b> ventes non validées.', 'fa-hourglass-half')}
       ${params}
       <section class="card"><div class="card-head"><div><h3>${S.multi ? 'Factures B2C par mois' : 'Facture B2C'}</h3><p>${S.multi ? esc(libSelection(S.moisSel)) : 'Modèle de la facture normalisée : prix et montants TTC (TVA 18 %), puis ventilation HT / impôt'}</p></div>${bouton('xl-b2c', 'fa-file-excel', 'Excel')}</div><div id="tb-fb2c"></div></section>
@@ -527,11 +592,16 @@
         ${A.kpi('fa-sack-dollar', 'pos', 'Net ' + esc(pr), fc(r.netRgz), pcx(r.ht ? r.netRgz / r.ht : null) + ' de la facture HT')}
         ${A.kpi('fa-user-tie', '', 'Reversé aux vendeurs', fc(r.vendeurs), 'commissions + primes vendeurs')}</div>
       <div class="grid-2">
-        ${A.carte('fd-donut', 'Rémunération ' + esc(pr) + ' — répartition', 'Ce que ' + esc(pr) + ' garde : part des commissions, primes partenaire, prime d\'objectif', '<div class="chart-box"><canvas id="fd-ch-donut" role="img" aria-label="Répartition de la rémunération"></canvas></div>')}
+        ${A.carte('fd-donut', 'Rémunération ' + esc(pr) + ' — répartition', 'Ce que ' + esc(pr) + ' garde : part des commissions, primes partenaire, prime indexée sur l\'objectif FTTH', '<div class="chart-box"><canvas id="fd-ch-donut" role="img" aria-label="Répartition de la rémunération"></canvas></div>')}
         ${A.carte('fd-struct', 'Structure de la facture B2C vs B2B', 'Montants HT : one-shot, primes des vendeurs, primes du partenaire', '<div class="chart-box"><canvas id="fd-ch-struct" role="img" aria-label="Structure de la facture"></canvas></div>')}</div>
       <div class="grid-2">
         ${A.carte('fd-b2c', 'Détail B2C', esc(moisFact()), '<div id="fd-t-b2c"></div>')}
         ${A.carte('fd-b2b', 'Détail B2B', esc(moisFact()), '<div id="fd-t-b2b"></div>')}</div>
+      ${(() => { const c0 = S.c2c, l = '<a class="lien-nu" href="#facturation-b2c">Facture B2C</a>';
+        if (S.multi) { const n = S.parMois.filter((x) => S.objOp[x.mois]).length; return CT.ui.enClair('Prime partenaire indexée (objectif FTTH de l\'opérateur) : <b>' + fc(r.primeObjectif) + '</b> sur la période · objectif saisi pour ' + n + ' mois sur ' + S.parMois.length + ' (' + l + ').', 'fa-bullseye'); }
+        const o = S.objOp[S.mois];
+        if (!o) return CT.ui.enClair('Objectif FTTH de l\'opérateur non saisi pour ' + esc(moisFact()) + ' : facture sans la prime partenaire indexée. Saisissez-le dans ' + l + '.', 'fa-bullseye');
+        return CT.ui.enClair('Objectif FTTH de l\'opérateur : <b>' + mn(o) + '</b> ventes · ventes du mois : <b>' + mn(c0 ? c0.ventesObjectif : 0) + '</b> → ' + (c0 && c0.objectifAtteint ? 'atteint, prime partenaire indexée de <b>' + fc(c0.primeObjectif) + '</b> HT' : 'non atteint, pas de prime') + ' (' + l + ').', c0 && c0.objectifAtteint ? 'fa-face-smile' : 'fa-bullseye'); })()}
       ${S.multi ? A.carte('fd-mois', 'Factures par mois', 'Chaque mois de la période · la loupe ouvre le mois seul', '<div id="fd-t-mois"></div>') : ''}
       <div class="grid-3-1">${A.carte('fd-net', 'Rémunération nette ' + esc(pr), 'Facture HT = reversé aux vendeurs + net ' + esc(pr), '<div id="fd-t-net"></div>')}${carteHistorique()}</div></div>`;
     if (S.multi) {
@@ -542,14 +612,14 @@
         pied: { lib: 'TOTAL', ventesB2C: r.ventesB2C, ventesB2B: r.ventesB2B, reportes: r.reportes, ht: r.ht, ttc: r.ttc, vendeurs: r.vendeurs, netRgz: r.netRgz } }));
     }
     const t = (id, l) => $(id).append(creer({ pageSize: 0, caption: id, lignes: l.filter((x) => x.m || x.toujours), colonnes: [{ cle: 'r', titre: 'Rubrique' }, { cle: 'm', titre: 'Montant HT (FCFA)', num: true, fmt: CT.fmt.mnt }], pied: { r: 'TOTAL HT', m: CT.somme(l, (x) => x.m) } }));
-    t('#fd-t-b2c', [{ r: 'One-shot (' + mn(r.ventesB2C) + ' ventes)', m: r.oneShotB2C, toujours: 1 }, { r: 'Primes de performance vendeurs', m: r.primesVendB2C }, { r: 'Prime de performance partenaire', m: r.primePartB2C }, { r: 'Prime d\'atteinte de l\'objectif', m: r.primeObjectif }]);
+    t('#fd-t-b2c', [{ r: 'One-shot (' + mn(r.ventesB2C) + ' ventes)', m: r.oneShotB2C, toujours: 1 }, { r: 'Primes de performance vendeurs', m: r.primesVendB2C }, { r: 'Prime de performance partenaire', m: r.primePartB2C }, { r: 'Prime partenaire indexée (objectif FTTH)', m: r.primeObjectif }]);
     t('#fd-t-b2b', [{ r: 'One-shot (' + mn(r.ventesB2B) + ' ventes)', m: r.oneShotB2B, toujours: 1 }, { r: 'Primes vendeurs (hors reports)', m: r.primesVendB2B }, { r: 'Prime partenaire', m: r.primePartB2B }]);
     $('#fd-t-net').append(creer({ pageSize: 0, caption: 'Rémunération nette', lignes: [
       { r: 'Part ' + pr + ' des commissions B2C (20 %, Anonymat 0 %)', g: r.partRgzB2C }, { r: 'Part ' + pr + ' des commissions B2B (20 %)', g: r.partRgzB2B }, { r: 'Prime de performance partenaire B2C', g: r.primePartB2C },
-      { r: 'Prime partenaire B2B', g: r.primePartB2B }, { r: 'Prime d\'atteinte de l\'objectif', g: r.primeObjectif }, { r: 'Reversé aux vendeurs B2C (commissions + primes)', v: r.vendeursB2C }, { r: 'Reversé aux vendeurs B2B (commissions + primes)', v: r.vendeursB2B }],
+      { r: 'Prime partenaire B2B', g: r.primePartB2B }, { r: 'Prime partenaire indexée (objectif FTTH de l\'opérateur)', g: r.primeObjectif }, { r: 'Reversé aux vendeurs B2C (commissions + primes)', v: r.vendeursB2C }, { r: 'Reversé aux vendeurs B2B (commissions + primes)', v: r.vendeursB2B }],
       colonnes: [{ cle: 'r', titre: 'Rubrique' }, { cle: 'g', titre: 'Net ' + pr + ' (FCFA)', num: true, fmt: (v) => (v == null ? '' : CT.fmt.mnt(v)) }, { cle: 'v', titre: 'Vendeurs (FCFA)', num: true, fmt: (v) => (v == null ? '' : CT.fmt.mnt(v)) }],
       pied: { r: 'TOTAL (= facture HT ' + CT.fmt.mnt(r.ht) + ')', g: r.netRgz, v: r.vendeurs } }));
-    const P = A.palette(), parts = [['Part commissions B2C', r.partRgzB2C], ['Part commissions B2B', r.partRgzB2B], ['Prime partenaire B2C', r.primePartB2C], ['Prime partenaire B2B', r.primePartB2B], ['Prime d\'objectif', r.primeObjectif]].filter((x) => x[1] > 0);
+    const P = A.palette(), parts = [['Part commissions B2C', r.partRgzB2C], ['Part commissions B2B', r.partRgzB2B], ['Prime partenaire B2C', r.primePartB2C], ['Prime partenaire B2B', r.primePartB2B], ['Prime indexée objectif FTTHtif', r.primeObjectif]].filter((x) => x[1] > 0);
     A.graphe('fd-ch-donut', { type: 'doughnut', data: { labels: parts.map((x) => x[0]), datasets: [{ data: parts.map((x) => x[1]), backgroundColor: P, borderWidth: 2, borderColor: A.jeton('--surface') }] },
       options: { cutout: '62%', interaction: { mode: 'nearest', intersect: true }, plugins: { legend: { position: 'right' }, tooltip: { callbacks: { label: (x) => ' ' + x.label + ' : ' + CT.fmt.fcfa(x.parsed) } } } } });
     const ds = (label, a, b, col) => ({ label, data: [a, b], backgroundColor: col, stack: 's', borderRadius: 4, maxBarThickness: 60 });
@@ -655,9 +725,9 @@
     // 3. Reports à récupérer : ventes en attente (VALIDE) facturables une fois validées
     const repC = c ? c.nonPayes.reportes : 0, repB = d ? d.nonPayes.reportes : 0, osC = c && c.quantite ? c.oneShot / c.quantite : 0, osB = d && d.payees ? (d.commVTB + d.commPVT) / d.payees : 0;
     if (repC + repB) reco.push({ ic: 'fa-hourglass-half', titre: mn(repC + repB) + ' vente(s) reportée(s) à faire valider', gain: repC * osC + repB * osB, detail: mn(repC) + ' B2C et ' + mn(repB) + ' B2B au statut VALIDE : relancer installation et validation pour les facturer (one-shot moyen ' + CT.fmt.int(osC) + ' FCFA en B2C' + (repB ? ', ' + CT.fmt.int(osB) + ' FCFA en B2B' : '') + ').' });
-    // 4. Prime d'atteinte de l'objectif (B2C)
-    if (c && c.objectif) { const sv = R.b2c.primeObjectif.find((p) => p[0] > c.quantite); if (!c.objectifAtteint) reco.push({ ic: 'fa-bullseye', titre: 'Prime d\'objectif : ' + mn(c.objectif - c.quantite) + ' vente(s) B2C manquante(s)', gain: [[0, 0]].concat(R.b2c.primeObjectif).filter((p) => c.objectif >= p[0]).pop()[1], detail: 'Objectif B2C du mois : ' + mn(c.objectif) + ' ventes (Paramètres › Objectifs).' }); else if (sv) reco.push({ ic: 'fa-bullseye', titre: 'Prime d\'objectif : ' + mn(sv[0] - c.quantite) + ' vente(s) pour le palier de ' + CT.fmt.int(sv[1]), gain: sv[1] - c.primeObjectif, detail: 'Objectif atteint ; le palier suivant de la prime d\'objectif est à ' + mn(sv[0]) + ' ventes.' }); }
-    else if (c) reco.push({ ic: 'fa-bullseye', titre: 'Prime d\'atteinte de l\'objectif non calculée', gain: 0, detail: 'Aucun objectif B2C pour ce mois dans Paramètres › Objectifs : créez les objectifs du mois pour que la prime soit calculée.' });
+    // 4. Prime partenaire indexée au taux d'atteinte de l'objectif FTTH de l'opérateur (B2C) : ventes du mois sans arriérés
+    if (c && c.objectif) { const v = c.ventesObjectif, sv = R.b2c.primeObjectif.find((p) => p[0] > v); if (!c.objectifAtteint) reco.push({ ic: 'fa-bullseye', titre: 'Prime indexée objectif FTTH : ' + mn(c.objectif - v) + ' vente(s) du mois manquante(s)', gain: [[0, 0]].concat(R.b2c.primeObjectif).filter((p) => c.objectif >= p[0]).pop()[1], detail: 'Objectif de l\'opérateur : ' + mn(c.objectif) + ' ventes ; ' + mn(v) + ' ventes du mois (sans les arriérés).' }); else if (sv) reco.push({ ic: 'fa-bullseye', titre: 'Prime indexée objectif FTTH : ' + mn(sv[0] - v) + ' vente(s) pour la tranche de ' + CT.fmt.int(sv[1]), gain: sv[1] - c.primeObjectif, detail: 'Objectif atteint ; la tranche suivante commence à ' + mn(sv[0]) + ' ventes du mois.' }); }
+    else if (c) reco.push({ ic: 'fa-bullseye', titre: 'Objectif FTTH de l\'opérateur non saisi', gain: 0, detail: 'Saisissez l\'objectif du mois dans Facture B2C : la prime partenaire indexée (200 000 à 500 000 HT) sera ajoutée à la facture s\'il est atteint.' });
     // 5. Mix B2B : une vente B2B rapporte plus qu'une vente B2C
     if (c && d && osB > osC) reco.push({ ic: 'fa-scale-balanced', titre: 'Une vente B2B rapporte ' + CT.fmt.int(osB - osC) + ' FCFA de plus qu\'une vente B2C', gain: 0, detail: 'One-shot moyen : ' + CT.fmt.int(osB) + ' FCFA en B2B contre ' + CT.fmt.int(osC) + ' FCFA en B2C. Orienter les vendeurs vers les entreprises augmente la facture à volume égal.' });
     reco.sort((x, y) => y.gain - x.gain); S.reco = reco;
@@ -700,6 +770,7 @@
       else if (b.id === 'xl-ch' && S.chDef) telecharger(S.chDef.nom.replace(/\s/g, '_'), [S.chDef]);
     } catch (err) { CT.toast('Export impossible : ' + err.message, 'err'); }
   }
+  document.addEventListener('submit', (e) => { if (e.target.id === 'fo-obj') { e.preventDefault(); enregistrerObjectif(e.target.dataset.mois, $('#fo-val').value); } });
   document.addEventListener('change', evenements);
   document.addEventListener('click', clics);
   document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-fmois]'); if (b) { choisirMois(b.dataset.fmois); if (!b.closest('#fp-mois')) window.scrollTo({ top: 0 }); } });
@@ -715,7 +786,7 @@
         ['Facture B2C HT (FCFA)', r.htB2C], ['Ventes B2C facturées', r.ventesB2C], ['Facture B2B HT (FCFA)', r.htB2B], ['Ventes B2B facturées', r.ventesB2B], ['Ventes reportées (non facturées)', r.reportes],
         ['Net ' + pr + ' (FCFA)', r.netRgz], ['Reversé aux vendeurs (FCFA)', r.vendeurs]] },
       { nom: 'Rémunération nette', cols: [50, 18, 18], total: false, aoa: [['Rubrique', 'Net ' + pr + ' (FCFA)', 'Vendeurs (FCFA)'], ['Part ' + pr + ' des commissions B2C', r.partRgzB2C, ''], ['Part ' + pr + ' des commissions B2B', r.partRgzB2B, ''],
-        ['Prime de performance partenaire B2C', r.primePartB2C, ''], ['Prime partenaire B2B', r.primePartB2B, ''], ['Prime d\'atteinte de l\'objectif', r.primeObjectif, ''], ['Reversé aux vendeurs B2C', '', r.vendeursB2C], ['Reversé aux vendeurs B2B', '', r.vendeursB2B],
+        ['Prime de performance partenaire B2C', r.primePartB2C, ''], ['Prime partenaire B2B', r.primePartB2B, ''], ['Prime partenaire indexée (objectif FTTH de l\'opérateur)', r.primeObjectif, ''], ['Reversé aux vendeurs B2C', '', r.vendeursB2C], ['Reversé aux vendeurs B2B', '', r.vendeursB2B],
         ['TOTAL (= facture HT ' + CT.fmt.int(r.ht) + ')', r.netRgz, r.vendeurs]] }]
       .concat(S.multi ? [{ nom: 'Factures par mois', cols: [20, 12, 12, 12, 18, 18, 18, 18], aoa: [['Mois', 'Ventes B2C', 'Ventes B2B', 'Reportées', 'Facture HT (FCFA)', 'TTC (FCFA)', 'Vendeurs (FCFA)', 'Net ' + pr + ' (FCFA)']]
           .concat(S.parMois.map((x) => { const y = synthese(x.c2c, x.c2b); return [CT.date.libelleMois(x.mois), y.ventesB2C, y.ventesB2B, y.reportes, y.ht, y.ttc, y.vendeurs, y.netRgz]; })) }] : [],

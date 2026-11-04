@@ -51,6 +51,8 @@ $routes = [
     ['POST', 'imports/factures', [FactureController::class, 'importer']],
     ['GET', 'factures/mois', [FactureController::class, 'mois']],
     ['GET', 'factures/imports', [FactureController::class, 'imports']],
+    ['GET', 'factures/objectifs', [FactureController::class, 'objectifs']],
+    ['PUT', 'factures/objectifs/{mois}', [FactureController::class, 'enregistrerObjectif']],
     ['GET', 'factures', [FactureController::class, 'lignes']],
 
     // Consultation / filtrage / ajout manuel

@@ -164,10 +164,11 @@ final class FactureImporter
         }
 
         $sources = array_values(array_unique(array_column($lu['lignes'], 'source')));
+        $changements = self::comparer($lu['lignes'], $mois, $sources);   // pour l'historique : « Modifié » + détail
         $importId = Import::creer(['type' => 'factures', 'nom_fichier' => mb_substr($nomFichier, 0, 255), 'file_hash' => hash_file('sha256', $chemin), 'statut' => 'en_cours', 'mois' => $mois]);
 
         try {
-            $stats = Db::transaction(function () use ($lu, $mois, $sources, $importId) {
+            $stats = Db::transaction(function () use ($lu, $mois, $sources, $importId, $changements) {
                 $supprimees = Db::executer('DELETE FROM `factures_lignes` WHERE `mois` = ? AND `source` IN ('.Db::marques(count($sources)).')', array_merge([$mois], $sources));
                 $maintenant = Db::maintenant();
                 foreach (array_chunk($lu['lignes'], 300) as $lot) {
@@ -179,7 +180,7 @@ final class FactureImporter
                     Db::upsert('factures_lignes', $valeurs, ['updated_at']);
                 }
 
-                return self::stats($lu, $mois, $supprimees);
+                return self::stats($lu, $mois, $supprimees) + ['changements' => $supprimees ? $changements : null];
             });
         } catch (Throwable $e) {
             Import::modifier($importId, ['statut' => 'echec', 'erreur' => mb_substr($e->getMessage(), 0, 2000)]);
@@ -188,6 +189,89 @@ final class FactureImporter
         Import::modifier($importId, ['statut' => 'ok', 'stats' => $stats]);
 
         return ['statut' => 'importe', 'message' => self::message($stats, $nomFichier), 'stats' => $stats];
+    }
+
+    /**
+     * Aperçu AVANT import (rien n'est écrit) : chiffres du fichier + comparaison avec ce qui est déjà en base pour ce mois.
+     * Le navigateur l'affiche dans « Contrôle avant import » ; l'utilisateur confirme, puis le fichier est importé (importer()).
+     *
+     * @return array<string, mixed>
+     */
+    public function apercu(string $chemin, string $nomFichier, ?string $mois = null): array
+    {
+        $lu = $this->lire($chemin, $nomFichier);
+        if (! $lu['lignes']) {
+            throw new InvalidArgumentException('Aucune liste de clients ni d\'arriérés trouvée dans « '.$nomFichier.' ». Feuilles du fichier : '
+                .implode(', ', $lu['ignorees']).'. Il faut une feuille nommée « Liste des clients » (ou « Liste clients ») ou « Liste des arriérés », avec les colonnes LOGIN, DEBIT et PAIEMENT.');
+        }
+        $mois ??= $lu['mois'];
+        if ($mois === null) {
+            throw new InvalidArgumentException('Mois de la facture introuvable : ni les dates de commande ni le nom du fichier « '.$nomFichier.' » ne l\'indiquent. Ajoutez le mois au nom du fichier (ex. « POINT VENTES FTTH RGZ SEPTEMBRE 2026.xlsx »).');
+        }
+        $sources = array_values(array_unique(array_column($lu['lignes'], 'source')));
+        $c = self::comparer($lu['lignes'], $mois, $sources);
+
+        return ['statut' => 'apercu', 'fichier' => $nomFichier, 'stats' => self::stats($lu, $mois, $c['existantes']), 'comparaison' => $c];
+    }
+
+    /**
+     * Fichier comparé aux lignes déjà en base pour le même mois et les mêmes types de feuilles (celles que l'import remplacera).
+     * Une vente = source + numéro + n° de facture (à défaut feuille + n° de ligne) ; modifiée si son état, son débit, son login ou sa liste change.
+     *
+     * @param  array<int, array<string, mixed>>  $lignes
+     * @param  string[]  $sources
+     * @return array<string, mixed>
+     */
+    public static function comparer(array $lignes, string $mois, array $sources): array
+    {
+        $cle = static function (array $l, array &$vus): string {
+            $k = ($l['numero'] ?? '') !== '' || ($l['facture'] ?? '') !== ''
+                ? $l['source'].'|'.($l['numero'] ?? '').'|'.($l['facture'] ?? '')
+                : $l['source'].'|'.($l['feuille'] ?? '').'#'.($l['ligne'] ?? '');
+            $vus[$k] = ($vus[$k] ?? 0) + 1;   // même vente présente deux fois : 2e occurrence comptée à part
+
+            return $k.'~'.$vus[$k];
+        };
+        $champs = ['etat', 'debit', 'login_key', 'liste'];
+        $avant = [];
+        $vus = [];
+        $base = $sources ? Db::select('SELECT `source`, `numero`, `facture`, `feuille`, `ligne`, `etat`, `debit`, `login_key`, `login`, `liste`, `fichier` FROM `factures_lignes`
+            WHERE `mois` = ? AND `source` IN ('.Db::marques(count($sources)).') ORDER BY `id`', array_merge([$mois], $sources)) : [];
+        foreach ($base as $l) {
+            $avant[$cle($l, $vus)] = $l;
+        }
+        $vus = [];
+        $nouvelles = $modifiees = $inchangees = 0;
+        $exemples = [];
+        $libEtat = ['PAYE' => 'à payer', 'REPORT_PAYE' => 'arriéré à payer', 'REPORTE' => 'reportée', 'NON_VALIDE' => 'non validée'];
+        foreach ($lignes as $l) {
+            $k = $cle($l, $vus);
+            if (! isset($avant[$k])) {
+                $nouvelles++;
+                continue;
+            }
+            $a = $avant[$k];
+            unset($avant[$k]);
+            $diff = [];
+            foreach ($champs as $c) {
+                if ((string) ($a[$c] ?? '') !== (string) ($l[$c] ?? '')) {
+                    $diff[] = $c === 'etat' ? ($libEtat[$a['etat']] ?? $a['etat']).' → '.($libEtat[$l['etat']] ?? $l['etat'])
+                        : ($c === 'login_key' ? 'login' : $c).' '.($a[$c] ?? '—').' → '.($l[$c] ?? '—');
+                }
+            }
+            if ($diff) {
+                $modifiees++;
+                if (count($exemples) < 6) {
+                    $exemples[] = ($l['numero'] ?: ($l['facture'] ?: 'ligne '.$l['ligne'])).' ('.($l['login'] ?? '—').') : '.implode(', ', $diff);
+                }
+            } else {
+                $inchangees++;
+            }
+        }
+        $fichiers = array_values(array_unique(array_filter(array_column($base, 'fichier'))));
+
+        return ['existantes' => count($base), 'fichiers_existants' => $fichiers, 'nouvelles' => $nouvelles, 'modifiees' => $modifiees,
+            'retirees' => count($avant), 'inchangees' => $inchangees, 'identique' => $base && ! $nouvelles && ! $modifiees && ! $avant, 'exemples' => $exemples];
     }
 
     /** Type de feuille d'après son nom, ou null si elle ne nous intéresse pas. */

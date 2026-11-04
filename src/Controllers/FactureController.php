@@ -31,7 +31,10 @@ final class FactureController
         $mois = Valider::mois($request, 'mois', false);
 
         try {
-            $res = (new FactureImporter())->importer($f['chemin'], $f['nom'], $mois);
+            // apercu=1 : lecture et comparaison avec la base SANS rien écrire (fenêtre « Contrôle avant import ») ; sinon import
+            $res = in_array((string) $request->input('apercu'), ['1', 'true'], true)
+                ? (new FactureImporter())->apercu($f['chemin'], $f['nom'], $mois)
+                : (new FactureImporter())->importer($f['chemin'], $f['nom'], $mois);
         } catch (InvalidArgumentException $e) {
             return Response::json(['message' => $e->getMessage()], 422);
         } catch (SpreadsheetException $e) {
@@ -77,10 +80,39 @@ final class FactureController
                 'date' => SouscriptionController::iso8601($i['created_at']), 'erreur' => $i['erreur'] ? mb_substr($i['erreur'], 0, 200) : null,
                 'facturees' => $st['facturees'] ?? null, 'a_payer' => $st['a_payer'] ?? null, 'arrieres' => $st['arrieres'] ?? null,
                 'reportees' => $st['reportees'] ?? null, 'non_validees' => $st['non_validees'] ?? null, 'remplacees' => $st['remplacees'] ?? null,
+                'changements' => $st['changements'] ?? null,
                 'feuilles' => array_map(static fn (array $f) => $f['nom'].' ('.$f['lignes'].')', $st['feuilles'] ?? [])];
         }, $l);
 
         return Response::json(['imports' => $l]);
+    }
+
+    /* GET /api/factures/objectifs : objectif FTTH B2C de l'opérateur, par mois → { "2026-09": 1000, … } */
+    public function objectifs(Request $request): Response
+    {
+        $o = [];
+        foreach (Db::select('SELECT `mois`, `objectif_b2c` FROM `factures_objectifs` WHERE `objectif_b2c` IS NOT NULL ORDER BY `mois`') as $r) {
+            $o[$r['mois']] = (int) $r['objectif_b2c'];
+        }
+
+        return Response::json(['objectifs' => (object) $o]);
+    }
+
+    /* PUT /api/factures/objectifs/{mois}   { "objectif_b2c": 1000 }  (null ou vide = effacer : facture sans la prime) */
+    public function enregistrerObjectif(Request $request, string $mois): Response
+    {
+        if (! preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $mois)) {
+            return Response::json(['message' => 'Mois invalide (format AAAA-MM).'], 422);
+        }
+        $v = $request->input('objectif_b2c');
+        if ($v !== null && $v !== '' && (! is_numeric($v) || (int) $v < 0 || (int) $v != $v || (int) $v > 1000000)) {
+            return Response::json(['message' => 'L\'objectif doit être un nombre entier de ventes (ex. 1000).'], 422);
+        }
+        $obj = $v === null || $v === '' ? null : (int) $v;
+        $maintenant = Db::maintenant();
+        Db::upsert('factures_objectifs', [['mois' => $mois, 'objectif_b2c' => $obj, 'created_at' => $maintenant, 'updated_at' => $maintenant]], ['objectif_b2c', 'updated_at']);
+
+        return Response::json(['mois' => $mois, 'objectif_b2c' => $obj]);
     }
 
     /* GET /api/factures?mois=AAAA-MM : lignes du mois (sans la copie brute « donnees », inutile aux calculs) */

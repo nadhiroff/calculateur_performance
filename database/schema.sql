@@ -194,3 +194,14 @@ CREATE TABLE IF NOT EXISTS `factures_lignes` (
   KEY `factures_lignes_etat_index` (`mois`, `etat`),
   KEY `factures_lignes_login_index` (`login_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Objectif FTTH B2C donné chaque mois par l'opérateur (saisi dans Facturation › Facture B2C) : déclenche la ligne de facture
+-- « PRIME PARTENAIRE INDEXÉE AU TAUX D'ATTEINTE OBJECTIF FTTH » (ventes du mois ≥ objectif → 300-599 : 200 000 · 600-999 : 300 000 · 1000+ : 500 000 HT).
+-- Sans objectif saisi pour le mois : facture sans cette prime.
+CREATE TABLE IF NOT EXISTS `factures_objectifs` (
+  `mois` char(7) NOT NULL,
+  `objectif_b2c` int unsigned DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`mois`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

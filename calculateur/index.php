@@ -20,8 +20,8 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous">
   <link rel="stylesheet" href="assets/css/design-system.css?v=20261021-15">
-  <link rel="stylesheet" href="assets/css/components.css?v=20261104-w2">
-  <link rel="stylesheet" href="assets/css/dashboard.css?v=20261104-u1">
+  <link rel="stylesheet" href="assets/css/components.css?v=20261104-x2">
+  <link rel="stylesheet" href="assets/css/dashboard.css?v=20261104-y1">
   <link rel="stylesheet" href="assets/css/print.css?v=20261021-15">
   <style>/* Page Paramètres (reprise de parametres.php, limitée à #view-parametres) */
 
@@ -306,7 +306,7 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer crossorigin="anonymous"></script>
   <script src="assets/js/utils.js?v=20261104-r1" defer></script>
   <script src="assets/js/table.js?v=20261021-15" defer></script>
-  <script src="assets/js/api.js?v=20261104-v1" defer></script>
+  <script src="assets/js/api.js?v=20261104-y1" defer></script>
   <script src="assets/js/store.js?v=20261027-offres" defer></script>
   <script src="assets/js/regles.js?v=20261027-offres" defer></script>
   <script src="assets/js/objectifs.js?v=20261104-s1" defer></script>
@@ -319,8 +319,8 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
   <script src="assets/js/perf_partenaire.js?v=20261104-r1" defer></script>
   <script src="assets/js/export.js?v=20261104-k1" defer></script>
   <script src="assets/js/partage.js?v=20261104-k1" defer></script>
-  <script src="assets/js/facturation_calc.js?v=20261104-i1" defer></script>
-  <script src="assets/js/facturation.js?v=20261104-w2" defer></script>
+  <script src="assets/js/facturation_calc.js?v=20261104-y1" defer></script>
+  <script src="assets/js/facturation.js?v=20261104-y1" defer></script>
   <script src="assets/js/analyse_calc.js?v=20261104-e1" defer></script>
   <script src="assets/js/analyse.js?v=20261104-k1" defer></script>
   <script src="assets/js/parametres.js?v=20261104-r1" defer></script>

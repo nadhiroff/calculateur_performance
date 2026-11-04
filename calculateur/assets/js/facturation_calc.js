@@ -145,10 +145,14 @@
     const seuil200 = R.b2c.nouveauPartenaire ? R.b2c.seuilNouveauPartenaire : 200;
     const prixPart = qte < seuil200 ? 0 : tranche(R.b2c.primePartenaire.slice(1), qte) || R.b2c.primePartenaire[1][1];
     const primePartenaire = qte * prixPart;
+    /* PRIME PARTENAIRE INDEXÉE AU TAUX D'ATTEINTE OBJECTIF FTTH : objectif B2C donné par l'opérateur pour le mois.
+       Ventes comparées = VENTES DU MOIS (« A PAYER »), sans les arriérés des mois précédents. Objectif non atteint → 0 ;
+       atteint → montant de la tranche des ventes réalisées (300-599 : 200 000 · 600-999 : 300 000 · 1000+ : 500 000 HT). Sans objectif : pas de prime. */
+    const ventesObjectif = b2c.filter((l) => l.paiement === 'PAYE').length;
     let primeObjectif = 0, objectifAtteint = null;
     if (R.b2c.objectif != null) {
-      objectifAtteint = qte >= R.b2c.objectif;
-      primeObjectif = objectifAtteint && qte >= R.b2c.primeObjectif[0][0] ? tranche([[0, 0]].concat(R.b2c.primeObjectif), qte) : 0;
+      objectifAtteint = ventesObjectif >= R.b2c.objectif;
+      primeObjectif = objectifAtteint && ventesObjectif >= R.b2c.primeObjectif[0][0] ? tranche([[0, 0]].concat(R.b2c.primeObjectif), ventesObjectif) : 0;
     }
     const primeVendeurs = logins.reduce((s, g) => s + g.primePerf, 0);
     const totalHT = oneShot + primeVendeurs + primePartenaire + primeObjectif;
@@ -157,7 +161,7 @@
       quantite: qte, reportsPayes: b2c.filter((l) => l.paiement === 'REPORT_PAYE').length,
       nonPayes: { reportes: lignes.filter((l) => l.paiement === 'REPORTE').length, nonValides: lignes.filter((l) => l.paiement === 'NON_VALIDE').length },
       oneShot, partVendeurs: logins.reduce((s, g) => s + g.partVendeur, 0), partPartenaire: logins.reduce((s, g) => s + g.partPartenaire, 0),
-      primeVendeurs, prixPrimePartenaire: prixPart, primePartenaire, objectif: R.b2c.objectif, objectifAtteint, primeObjectif,
+      primeVendeurs, prixPrimePartenaire: prixPart, primePartenaire, objectif: R.b2c.objectif, objectifAtteint, primeObjectif, ventesObjectif,
       totalHT, tva: arrondi(totalHT * R.tva), totalTTC: arrondi(totalHT * (1 + R.tva)),
     };
   }
@@ -272,8 +276,8 @@
        1. one-shot : une ligne par débit ET par prix — une vente d'avant le 17/06 payée plus tard garde l'ancien tarif
           (ex. juillet 2026 : FTTH_Home_20M à 11 800 TTC = 10 000 HT, ancienne grille) ;
        2. « PRIME DU PARTENAIRE » : prix du palier × quantité facturée (reports payés compris) ;
-       3. « Prime de Performance <login> (<ventes>) », quantité 1 — B2B : ventes hors reports (base de la prime vendeur) ;
-       4. B2C : prime d'atteinte de l'objectif, si elle est gagnée.
+       3. B2C : « PRIME PARTENAIRE INDEXÉE AU TAUX D'ATTEINTE OBJECTIF FTTH », juste après la prime du partenaire, si l'objectif de l'opérateur est atteint ;
+       4. « Prime de Performance <login> (<ventes>) », quantité 1 — B2B : ventes hors reports (base de la prime vendeur).
      Prix unitaire TTC = HT × (1 + TVA) ; groupe de taxe « B » ; ventilation : Total (TTC) / Imposable (HT) / Impôt. */
   const nomDebit = (d) => d.replace(/^FTTH_HOME_/, 'FTTH_Home_');
   function facture(c, opts) {
@@ -286,8 +290,8 @@
         if (Number.isInteger(a) && a >= 0 && a <= n) { ajoute(nomDebit(d), pA, a); ajoute(nomDebit(d), pB, n - a); } else ajoute(nomDebit(d), n ? os / n : 0, n);
       });
       ajoute('PRIME DU PARTENAIRE', c.prixPrimePartenaire, c.quantite);
+      ajoute('PRIME PARTENAIRE INDEXÉE AU TAUX D\'ATTEINTE OBJECTIF FTTH (objectif ' + c.objectif + ' · ' + c.ventesObjectif + ' ventes)', c.primeObjectif, 1);
       c.logins.filter((g) => g.primePerf > 0).forEach((g) => ajoute('Prime de Performance ' + g.login + ' (' + g.ventes + ')', g.primePerf, 1));
-      ajoute('PRIME D\'ATTEINTE DE L\'OBJECTIF (' + c.objectif + ')', c.primeObjectif, 1);
     } else {
       c.debits.forEach((d) => ajoute(d, R.b2b.oneShot[d] || 0, c.totalParDebit[d] || 0));
       ajoute('PRIME DU PARTENAIRE', c.prixPrimePVT, c.payees);

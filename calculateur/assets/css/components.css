@@ -339,3 +339,10 @@ table.data td.cell-auto { background: var(--surface-2); color: var(--text-2); cu
   #fact-periode .pb-select { flex: 1 1 0; max-width: none; }
 }
 #fact-periode .pb-select { max-width: 180px; }
+/* Barre « Mois facturé » : les boutons gardent leur mot entier (jamais rognés) ; s'il manque de place, la barre entière passe
+   sous le fil d'Ariane, alignée à droite. L'étiquette « Mois facturé » n'apparaît que sur grand écran (sinon en infobulle). */
+#fact-periode .pb-btns { flex: none; overflow: visible; max-width: none; }
+.topbar #fact-periode { flex: 0 0 auto; }
+@media (min-width: 768px) { .topbar:has(#fact-periode:not([hidden])) { flex-wrap: wrap; row-gap: var(--sp-2); } }
+@media (max-width: 1499.98px) { #fact-periode .pb-lib { display: none; } }
+@media (max-width: 767.98px) { #fact-periode #fp-mois { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); flex: 1 1 100%; overflow: visible; } #fact-periode #fp-mois .pb-btn { white-space: normal; } }
