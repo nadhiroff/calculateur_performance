@@ -339,6 +339,7 @@ main { padding: var(--sp-6) 0 var(--sp-16); }
 .rgz-hero .eyebrow { color: var(--accent-rgz); }
 .rgz-hero h2 { color: #fff; font-size: clamp(1.5rem, 3vw, 2.25rem); margin: 4px 0; }
 .rgz-hero p { color: #C5CFE2; margin: 0; }
+.rgz-hero-detail span { white-space: nowrap; }
 .rgz-hero-obj { display: grid; gap: var(--sp-2); padding: var(--sp-4); border-radius: var(--r-lg); background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .12); }
 .rgz-hero-obj span, .rgz-hero-obj small { color: #C5CFE2; font-size: var(--fs-13); }
 .rgz-hero-obj b { font-family: var(--font-title); font-size: var(--fs-32); line-height: 1; }

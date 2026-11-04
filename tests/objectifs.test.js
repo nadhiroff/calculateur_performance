@@ -40,6 +40,9 @@ t('semaine du 12 au 18/10 complète : 5 jours ouvrés sur 5 → objectif de la s
 t('semaine commencée (12 → 14/10) : 79 × 3 = 237', () => assert.strictEqual(O.objectifPeriode(OCT, '2026-10', '2026-10-12', '2026-10-14'), 237));
 t('18/10/2026 est un dimanche, non ouvré au calendrier', () => assert.strictEqual(O.estOuvre(OCT, '2026-10-18'), false));
 t('période 12 → 16/10 = 79 × 5 = 395', () => assert.strictEqual(O.objectifPeriode(OCT, '2026-10', '2026-10-12', '2026-10-16'), 395));
+t('mois entier 01 → 31/10 = objectif du mois 1 487 (79 × 22 = 1 738 plafonné)', () => assert.strictEqual(O.objectifPeriode(OCT, '2026-10', '2026-10-01', '2026-10-31'), 1487));
+t('01 → 26/10 : 79 × 18 = 1 422, sous le plafond', () => assert.strictEqual(O.objectifPeriode(OCT, '2026-10', '2026-10-01', '2026-10-26'), 1422));
+t('01 → 27/10 : 79 × 19 = 1 501 → plafonné à 1 487', () => assert.strictEqual(O.objectifPeriode(OCT, '2026-10', '2026-10-01', '2026-10-27'), 1487));
 
 console.log('\n' + ok + ' réussis, ' + ko + ' échec(s)');
 process.exit(ko ? 1 : 0);

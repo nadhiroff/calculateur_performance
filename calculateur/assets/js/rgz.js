@@ -30,11 +30,13 @@
     const ok = L.filter(compte);
     const k = CT.calc.kpis(L, { seuil: R.seuil_montant_atypique || 1e6 });
     const b2c = ok.filter((l) => l.segment !== 'B2B').length, b2b = ok.length - b2c;
+    // Logins actifs : logins distincts ayant au moins une vente validée sur la période
+    const actifs = new Set(ok.map((l) => l.loginKey).filter(Boolean)).size;
     const cp = e.primesPeriode, mp = e.motivPerf, obj = CT.periode.objectif(), sem = CT.periode.semaine();
     // Équipes face à l'objectif de la période : réalisé depuis le début de la période / objectif du jour × jours ouvrés écoulés
-    const equipes = mp.equipes.map((q) => { const o = Math.round(q.objADate != null ? q.objADate : q.objJour * mp.ouvresEcoules); return { id: q.id, real: q.real, obj: o, taux: o > 0 ? q.real / o : 0, objMois: q.objMois, realMois: (e.motiv.equipes.find((x) => x.id === q.id) || {}).real || 0 }; });
+    const equipes = mp.equipes.map((q) => { const o = Math.round(q.objADate != null ? q.objADate : Math.min(q.objJour * mp.ouvresEcoules, q.objMois || Infinity)); return { id: q.id, real: q.real, obj: o, taux: o > 0 ? q.real / o : 0, objMois: q.objMois, realMois: (e.motiv.equipes.find((x) => x.id === q.id) || {}).real || 0 }; });
     const equipeDe = (l) => (idx.get(l.loginKey) || {}).equipe || 'À préciser';
-    return { e, pr, p, L, ok, k, b2c, b2b, cp, m: e.motiv, mp, obj, sem, equipes, equipeDe, debutMois, dP, coupe: p.du < dP };
+    return { e, pr, p, L, ok, k, b2c, b2b, actifs, cp, m: e.motiv, mp, obj, sem, equipes, equipeDe, debutMois, dP, coupe: p.du < dP };
   }
 
   CT.rgz = {
@@ -42,9 +44,9 @@
       const root = document.getElementById('rgz-content'); if (!root) return;
       const e = E();
       if (!e.lignes.length) { root.innerHTML = ''; return; }
-      const d = donnees(), { pr, p, ok, k, b2c, b2b, cp, m, obj, sem } = d, r = m.reseau, mn = CT.fmt.int;
+      const d = donnees(), { pr, p, ok, k, b2c, b2b, actifs, cp, m, obj, sem } = d, r = m.reseau, mn = CT.fmt.int;
       const ecart = obj.real - obj.objectif;
-      const periode = 'du ' + CT.date.court(p.du) + ' au ' + CT.date.court(p.au), perObj = 'du ' + CT.date.court(d.dP) + ' au ' + CT.date.court(e.jourRef);
+      const sansObj = obj.objectif === 0, periode = 'du ' + CT.date.court(p.du) + ' au ' + CT.date.court(p.au), perObj = 'du ' + CT.date.court(d.dP) + ' au ' + CT.date.court(e.jourRef);
       document.getElementById('h-rgz').textContent = 'Tableau de bord ' + pr;
       document.getElementById('rgz-sub').textContent = 'Uniquement ' + pr + ' · période ' + periode + (d.coupe ? ' · objectifs, commissions et primes ' + perObj + ' (mensuels)' : '');
 
@@ -53,8 +55,8 @@
         <section class="rgz-hero">
           <div class="rgz-hero-txt"><span class="eyebrow">Partenaire ${CT.esc(pr)}</span>
             <h2>${mn(ok.length)} ventes validées</h2>
-            <p>${periode} · ${mn(b2c)} particuliers (B2C) · ${mn(b2b)} entreprises (B2B)</p></div>
-          <div class="rgz-hero-obj"><span>Objectif de la période</span><b class="num">${obj.taux == null ? '—' : CT.fmt.pct(obj.taux, 0)}</b>${CT.ui.jauge(obj.taux || 0, 'Objectif de la période')}<small>${mn(obj.real)} / ${CT.fmt.nat(obj.objectif)} ventes · ${perObj}</small></div>
+            <p class="rgz-hero-detail"><span>${periode}</span> · <span>${mn(b2c)} particulier${b2c > 1 ? 's' : ''} (B2C)</span> · <span>${mn(b2b)} entreprise${b2b > 1 ? 's' : ''} (B2B)</span> · <span title="Logins ayant au moins une vente validée sur la période">${mn(actifs)} login${actifs > 1 ? 's' : ''} actif${actifs > 1 ? 's' : ''}</span></p></div>
+          <div class="rgz-hero-obj"><span>Objectif de la période</span>${sansObj ? `<b class="num">${d.dP === e.jourRef ? 'Jour non ouvré' : 'Aucun jour ouvré'}</b><small>Pas d'objectif sur cette période (objectif du jour × 0 jour ouvré) · ${mn(obj.real)} vente${obj.real > 1 ? 's' : ''} réalisée${obj.real > 1 ? 's' : ''} hors jours ouvrés · ${perObj}</small>` : `<b class="num">${obj.taux == null ? '—' : CT.fmt.pct(obj.taux, 0)}</b>${CT.ui.jauge(obj.taux || 0, 'Objectif de la période')}<small>${mn(obj.real)} / ${CT.fmt.nat(obj.objectif)} ventes · ${perObj}</small>`}</div>
         </section>
         ${obj.objectif <= 0 ? CT.ui.enClair(`${CT.esc(pr)} a fait <b>${mn(obj.real)}</b> vente(s) ${perObj}. L'avance ou le retard ne peut pas être calculé : aucun jour ouvré sur la période ou objectifs du jour non renseignés (Paramètres › Objectifs).`, 'fa-circle-info') : CT.ui.enClair(ecart >= 0
           ? `<b>Bonne nouvelle :</b> ${CT.esc(pr)} est <b>en avance de ${mn(ecart)} vente(s)</b> sur l'objectif de la période (${CT.fmt.nat(obj.objectif)} attendues ${perObj}).`
@@ -62,7 +64,7 @@
         <div class="grid-tuiles">
           ${CT.ui.tuile({ icone: 'fa-calendar-day', ton: CT.ui.tonDe(r.objJour ? r.ventesJour / r.objJour : null), titre: 'Aujourd\'hui (' + CT.date.court(e.jourRef) + ')', valeur: r.objJour ? mn(r.ventesJour) + ' / ' + mn(r.objJour) : mn(r.ventesJour), p: r.objJour ? r.ventesJour / r.objJour : null, aide: r.objJour ? 'Ventes du jour / objectif du jour' : 'Ventes du jour · objectif du jour non renseigné' })}
           ${CT.ui.tuile({ icone: 'fa-calendar-week', ton: CT.ui.tonDe(sem.objectif ? sem.ventes / sem.objectif : null), titre: 'Semaine', valeur: sem.objectif ? mn(sem.ventes) + ' / ' + CT.fmt.nat(sem.objectif) : mn(sem.ventes), p: sem.objectif ? sem.ventes / sem.objectif : null, aide: 'Du ' + CT.date.court(sem.du) + ' au ' + CT.date.court(e.jourRef) + (sem.objectif ? '' : ' · objectif non renseigné') })}
-          ${CT.ui.tuile({ icone: 'fa-calendar', ton: CT.ui.tonDe(obj.taux), titre: 'Objectif de la période', valeur: mn(obj.real) + ' / ' + CT.fmt.nat(obj.objectif), p: obj.taux, aide: 'Mois de ' + CT.date.libelleMois(e.cle).toLowerCase() + ' : ' + mn(r.real) + ' / ' + mn(r.objMois) + ' au ' + CT.date.court(e.jourRef) })}
+          ${CT.ui.tuile({ icone: 'fa-calendar', ton: CT.ui.tonDe(obj.taux), titre: 'Objectif de la période', valeur: sansObj ? 'Pas d\'objectif' : mn(obj.real) + ' / ' + CT.fmt.nat(obj.objectif), p: sansObj ? null : obj.taux, aide: 'Mois de ' + CT.date.libelleMois(e.cle).toLowerCase() + ' : ' + mn(r.real) + ' / ' + mn(r.objMois) + ' au ' + CT.date.court(e.jourRef) })}
           ${CT.ui.tuile({ icone: 'fa-coins', ton: 'pos', titre: 'Commissions de la période', valeur: CT.fmt.fcfa(cp.total.commissions), aide: 'Dont ' + CT.fmt.fcfa(cp.total.partenaire) + ' pour ' + CT.esc(pr) })}
           ${CT.ui.tuile({ icone: 'fa-medal', ton: 'warn', titre: 'Primes de la période', valeur: CT.fmt.fcfa(cp.total.primes), aide: cp.mode === 'periode' ? 'Gagnées jour par jour (journées réussies, champion)' : 'Journées, champion, paliers et bonus à date' })}
           ${CT.ui.tuile({ icone: 'fa-hourglass-half', ton: k.valide ? 'warn' : '', titre: 'En attente', valeur: mn(k.valide), aide: 'Ventes pas encore validées (statut VALIDE)' })}

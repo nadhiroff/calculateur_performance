@@ -20,8 +20,8 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous">
   <link rel="stylesheet" href="assets/css/design-system.css?v=20261021-15">
-  <link rel="stylesheet" href="assets/css/components.css?v=20261104-n1">
-  <link rel="stylesheet" href="assets/css/dashboard.css?v=20261104-l1">
+  <link rel="stylesheet" href="assets/css/components.css?v=20261104-o3">
+  <link rel="stylesheet" href="assets/css/dashboard.css?v=20261104-p1">
   <link rel="stylesheet" href="assets/css/print.css?v=20261021-15">
   <style>/* Page Paramètres (reprise de parametres.php, limitée à #view-parametres) */
 
@@ -303,14 +303,14 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
   <script src="assets/js/api.js?v=20261022-2" defer></script>
   <script src="assets/js/store.js?v=20261027-offres" defer></script>
   <script src="assets/js/regles.js?v=20261027-offres" defer></script>
-  <script src="assets/js/objectifs.js?v=20261104-n3" defer></script>
+  <script src="assets/js/objectifs.js?v=20261104-q1" defer></script>
   <script src="assets/js/parser.js?v=20261027-offres" defer></script>
-  <script src="assets/js/calculs.js?v=20261104-f1" defer></script>
+  <script src="assets/js/calculs.js?v=20261104-q2" defer></script>
   <script src="assets/js/ui.js?v=20261104-s1" defer></script>
-  <script src="assets/js/dashboard.js?v=20261104-e1" defer></script>
-  <script src="assets/js/rgz.js?v=20261104-e1" defer></script>
-  <script src="assets/js/point_jour.js?v=20261104-l1" defer></script>
-  <script src="assets/js/perf_partenaire.js?v=20261104-l1" defer></script>
+  <script src="assets/js/dashboard.js?v=20261104-p2" defer></script>
+  <script src="assets/js/rgz.js?v=20261104-q1" defer></script>
+  <script src="assets/js/point_jour.js?v=20261104-q1" defer></script>
+  <script src="assets/js/perf_partenaire.js?v=20261104-q1" defer></script>
   <script src="assets/js/export.js?v=20261104-k1" defer></script>
   <script src="assets/js/partage.js?v=20261104-k1" defer></script>
   <script src="assets/js/facturation_calc.js?v=20261104-i1" defer></script>
@@ -318,6 +318,6 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
   <script src="assets/js/analyse_calc.js?v=20261104-e1" defer></script>
   <script src="assets/js/analyse.js?v=20261104-k1" defer></script>
   <script src="assets/js/parametres.js?v=20261104-g1" defer></script>
-  <script src="assets/js/app.js?v=20261104-n2" defer></script>
+  <script src="assets/js/app.js?v=20261104-o1" defer></script>
 </body>
 </html>

@@ -110,7 +110,7 @@
     const e = E(), f = lireFiltres(), pr = f.partenaire || e.prioritaire, dP = CT.periode.perfDu();
     const jr = CT.periode.jour(f), sem = CT.periode.semaine(f), obj = CT.periode.objectif(f), mo = CT.periode.mois(f);
     const cible = (b) => (b.objectif == null ? '—' : CT.fmt.nat(b.objectif));
-    const ligne = (titre, b, note) => `<div class="obj-row"><div class="top"><span>${titre}</span><b class="num">${CT.fmt.pct(b.taux)}</b></div>${barre(b.real, b.objectif || 0)}<div class="mini-cap">${CT.fmt.int(b.real)} / ${cible(b)} — ${note}</div></div>`;
+    const ligne = (titre, b, note) => `<div class="obj-row"><div class="top"><span>${titre}</span><b class="num">${b.objectif === 0 ? 'Pas d\'objectif' : CT.fmt.pct(b.taux)}</b></div>${barre(b.real, b.objectif || 0)}<div class="mini-cap">${b.objectif === 0 ? CT.fmt.int(b.real) + ' vente' + (b.real > 1 ? 's' : '') + ' — ' + note + ' · aucun jour ouvré' : CT.fmt.int(b.real) + ' / ' + cible(b) + ' — ' + note}</div></div>`;
     const statuts = f.statut || (e.motiv.regles.statuts_comptes || ['OK']).join(', ');
     document.getElementById('t-obj').textContent = 'Objectifs ' + pr;
     document.getElementById('obj-sub').textContent = 'Ventes ' + statuts + ' ' + pr + ' du ' + CT.date.court(dP) + ' au ' + CT.date.court(e.jourRef)
@@ -149,7 +149,7 @@
       kpi('fa-circle-check', 'info', 'Taux de réussite', CT.fmt.pct(k.taux, 1), 'STATUS = OK / total') +
       kpi('fa-hourglass-half', 'warn', 'En attente (VALIDE)', CT.fmt.int(k.valide), CT.fmt.pct(k.total ? k.valide / k.total : 0, 1) + ' du total, non comptées') +
       kpi('fa-basket-shopping', '', 'Panier moyen', CT.fmt.fcfa(k.panier), 'CA ÷ souscriptions') +
-      kpi('fa-bullseye', obj.taux != null && obj.taux >= 1 ? 'pos' : 'warn', 'Objectif ' + (filtres.partenaire || e.prioritaire) + ' — période', obj.taux == null ? '—' : CT.fmt.pct(obj.taux, 1), CT.fmt.int(obj.real) + ' / ' + (obj.objectif == null ? '—' : CT.fmt.nat(obj.objectif)) + ' ventes ' + (filtres.statut || 'OK'));
+      kpi('fa-bullseye', obj.taux != null && obj.taux >= 1 ? 'pos' : 'warn', 'Objectif ' + (filtres.partenaire || e.prioritaire) + ' — période', obj.objectif === 0 ? 'Pas d\'objectif' : obj.taux == null ? '—' : CT.fmt.pct(obj.taux, 1), CT.fmt.int(obj.real) + (obj.objectif === 0 ? ' ventes · aucun jour ouvré sur la période' : ' / ' + (obj.objectif == null ? '—' : CT.fmt.nat(obj.objectif)) + ' ventes ' + (filtres.statut || 'OK')));
     // Graphiques
     // Vue Jour / Semaine / Mois (barre de l'en-tête) : regroupement des comptes journaliers
     const q = CT.analyseCalc.regrouper(CT.calc.quotidien(L), CT.etat.gran || 'jour'), PAL = palette(), surface = jeton('--surface');

@@ -262,7 +262,7 @@
            Activation = agents actifs ÷ agents avec objectif. */
       const totalEquipes = (mo) => {
         const q = mo.equipes, S = (f) => CT.somme(q, f), ratio = (a, d) => (d > 0 ? a / d : 0);
-        const objMois = S((x) => x.objMois), real = S((x) => x.real), objADate = mo.multiMois ? S((x) => x.objADate) : S((x) => x.objJour) * mo.ouvresEcoules;
+        const objMois = S((x) => x.objMois), real = S((x) => x.real), objADate = mo.multiMois ? S((x) => x.objADate) : S((x) => x.objADate != null ? x.objADate : Math.min(x.objJour * mo.ouvresEcoules, x.objMois || Infinity));
         const actifs = S((x) => x.agentsActifs), avecObj = S((x) => x.agentsAvecObjectif);
         return ['', 'TOTAL', objMois, real, ratio(real, mo.multiMois ? S((x) => x.objTro) : mo.partielle ? objADate : objMois), ratio(real, objADate), actifs + '/' + avecObj, ratio(actifs, avecObj),
           S((x) => x.journeesReussies), '', S((x) => x.primeFinMois), S((x) => x.primesJournees), S((x) => x.trophee), S((x) => x.totalSup), S((x) => x.marge)];

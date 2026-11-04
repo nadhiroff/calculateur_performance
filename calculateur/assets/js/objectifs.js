@@ -42,7 +42,8 @@
        Objectif d'une période = objectif du jour × jours ouvrés de la période (calendrier de Paramètres).
        `cle` (AAAA-MM) est passé à part : un mois aux objectifs hérités garde son propre calendrier de dates. */
     ouvresEntre: (obj, cle, du, au) => obj.calendrier.ouvres.filter((d) => { const j = cle + '-' + String(d).padStart(2, '0'); return j >= du && j <= au; }).length,
-    objectifPeriode: (obj, cle, du, au) => CT.objectifs.totaux(obj).jour * CT.objectifs.ouvresEntre(obj, cle, du, au),
+    // plafonné à l'objectif du mois : mois entier = objectif du mois (79 × 22 = 1 738 dépasserait 1 487)
+    objectifPeriode: (obj, cle, du, au) => { const t = CT.objectifs.totaux(obj), v = t.jour * CT.objectifs.ouvresEntre(obj, cle, du, au); return t.mois > 0 ? Math.min(v, t.mois) : v; },
     /* Map cleLogin → {login, equipe, b2c, b2b, mois, primes, partRgz} */
     indexLogins(obj) {
       const m = new Map();

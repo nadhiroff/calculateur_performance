@@ -59,9 +59,8 @@
     if (!b || !zone) return;
     b.hidden = !etat.lignes.length || !m.length || etat.vue === 'parametres'; if (b.hidden) return;
     const trois = m.slice(-3), annees = new Set(trois.map((x) => x.mois.slice(0, 4))).size > 1;
-    // Libellés courts (« Oct. », « Déc. 26 ») ; le nom complet en infobulle
-    const COURT = ['Janv.', 'Févr.', 'Mars', 'Avr.', 'Mai', 'Juin', 'Juil.', 'Août', 'Sept.', 'Oct.', 'Nov.', 'Déc.'];
-    const lib = (x) => COURT[+x.mois.slice(5, 7) - 1] + (annees ? ' ' + x.mois.slice(2, 4) : '');
+    // Noms de mois en entier (« Octobre ») ; l'année est ajoutée quand les mois sont à cheval sur deux années (« Décembre 2026 »)
+    const lib = (x) => { const l = CT.date.libelleMois(x.mois); return annees ? l : l.split(' ')[0]; };
     const btns = (trois.length > 1 ? [[trois[0].mois + '-01|' + trois[trois.length - 1].au, trois.length + ' mois', 'Les ' + trois.length + ' derniers mois en base : ' + trois.map((x) => CT.date.libelleMois(x.mois)).join(', ')]] : [])
       .concat(trois.map((x) => [x.mois + '-01|' + x.au, lib(x), CT.date.libelleMois(x.mois) + ' (du 01 au ' + CT.date.court(x.au).slice(0, 5) + ')']));
     const d = $('#global-date-debut'), cur = ((d && d.value) || (etat.cle ? etat.cle + '-01' : '')) + '|' + (etat.jourRef || '');

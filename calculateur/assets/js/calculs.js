@@ -9,6 +9,9 @@
   const CT = window.CT;
   const pctDe = (a, b) => (b > 0 ? a / b : 0);
   const compte = (R, l) => (R.statuts_comptes || ['OK']).includes(l.statut);
+  /* Objectif sur n jours ouvrés = objectif du jour × n, plafonné à l'objectif du mois (le fichier d'objectifs divise par 20,
+     octobre compte 22 jours ouvrés : 79 × 22 = 1 738 > 1 487). Mois entier → objectif du mois (règlement : TRO = ventes ÷ objectif du mois). */
+  const plafond = (jour, n, mois) => (mois > 0 ? Math.min(jour * n, mois) : jour * n);
 
   const C = (CT.calc = {
     /* ---------- Filtres dynamiques ---------- */
@@ -90,7 +93,7 @@
       par.forEach((_, k) => { if (!idx.has(k)) agents.push({ cleLogin: k, login: [...brutParCle.get(k)][0], equipe: 'À préciser', objB2C: 0, objB2B: 0, objMois: 0, objJourF: 0, objSemF: 0, primes: false, partRgz: 0.2, horsObjectif: true }); });
       agents.forEach((a) => {
         const g = par.get(a.cleLogin) || { jours: new Map(), b2c: 0, b2b: 0 };
-        a.g = g; a.objJour = a.objJourF; a.objSemaine = a.objSemF; a.objPeriode = a.objJour * facteur;
+        a.g = g; a.objJour = a.objJourF; a.objSemaine = a.objSemF; a.objPeriode = plafond(a.objJour, facteur, a.objMois);
         a.realB2C = g.b2c; a.realB2B = g.b2b; a.real = g.b2c + g.b2b;
         a.ventesJour = CT.somme(joursP, (j) => g.jours.get(j) || 0);   // ventes de la période (= du jour si une seule journée)
         a.maxJour = Math.max(0, ...joursP.map((j) => g.jours.get(j) || 0));
@@ -131,7 +134,7 @@
 
       // Agents : cumul, TRO, paliers, primes
       agents.forEach((a) => {
-        a.objADate = Math.round(a.objJour * ouvresEcoules);
+        a.objADate = Math.round(plafond(a.objJour, ouvresEcoules, a.objMois));
         a.tro = pctDe(a.real, partielle ? a.objADate : a.objMois);
         a.rythme = pctDe(a.real, a.objADate);
         a.reste = Math.max(0, a.objMois - a.real);
@@ -159,15 +162,15 @@
         const t = eq.get(e.id);
         const objB2C = CT.somme(ags, (a) => a.objB2C), objB2B = CT.somme(ags, (a) => a.objB2B), objMois = objB2C + objB2B;
         const real = CT.somme(ags, (a) => a.real), realB2C = CT.somme(ags, (a) => a.realB2C), realB2B = CT.somme(ags, (a) => a.realB2B);
-        const objJour = CT.objectifs.jourEq(e, obj), objSemaine = CT.objectifs.semEq(e, obj), objPeriode = objJour * facteur, ventesJour = CT.somme(ags, (a) => a.ventesJour);
+        const objJour = CT.objectifs.jourEq(e, obj), objSemaine = CT.objectifs.semEq(e, obj), objPeriode = plafond(objJour, facteur, objMois), ventesJour = CT.somme(ags, (a) => a.ventesJour);
         const avecObj = ags.filter((a) => a.primes).length, actifs = ags.filter((a) => a.primes && a.tro + 1e-9 >= S.activation.seuil_agent).length;
         const tauxAct = pctDe(actifs, avecObj);
-        const tro = pctDe(real, partielle ? objJour * ouvresEcoules : objMois);
+        const tro = pctDe(real, partielle ? plafond(objJour, ouvresEcoules, objMois) : objMois);
         const bloque = tauxAct + 1e-9 < S.activation.taux_min;
         const pal = bloque ? null : CT.regles.palierSup(R, tro);
         const jourReussie = estPlage ? (objPeriode > 0 && ventesJour + 1e-9 >= objPeriode) : t.jourReussie;
         return { id: e.id, superviseur: e.superviseur, partRgz: e.part_rgz, objB2C, objB2B, objMois, objJour, objSemaine, objPeriode, real, realB2C, realB2B, ventesJour, tro,
-          realisation: objPeriode > 0 ? ventesJour / objPeriode : null, rythme: pctDe(real, objJour * ouvresEcoules),
+          realisation: objPeriode > 0 ? ventesJour / objPeriode : null, rythme: pctDe(real, plafond(objJour, ouvresEcoules, objMois)),
           jourReussie, journeesReussies: t.journeesReussies, primesJournees: t.journeesReussies * S.journee_equipe,
           primeSupJour: t.joursReussiesP * S.journee_equipe, joursReussiesP: t.joursReussiesP,
           agentsAvecObjectif: avecObj, agentsActifs: actifs, tauxActivation: tauxAct,
@@ -183,14 +186,14 @@
       // Réseau (équipes + logins hors objectifs)
       const horsEq = agents.filter((a) => a.horsObjectif);
       const horsVentesJour = CT.somme(horsEq, (a) => a.ventesJour);
-      const objMoisTot = CT.somme(equipes, (e) => e.objMois), objJourTot = CT.objectifs.jourTot(CT.somme(equipes, (e) => e.objJour), objMoisTot, obj), objSemaineTot = CT.objectifs.semTot(CT.somme(equipes, (e) => e.objSemaine), objMoisTot, obj), objPeriodeTot = objJourTot * facteur;
+      const objMoisTot = CT.somme(equipes, (e) => e.objMois), objJourTot = CT.objectifs.jourTot(CT.somme(equipes, (e) => e.objJour), objMoisTot, obj), objSemaineTot = CT.objectifs.semTot(CT.somme(equipes, (e) => e.objSemaine), objMoisTot, obj), objPeriodeTot = plafond(objJourTot, facteur, objMoisTot);
       const ventesJourEq = CT.somme(equipes, (e) => e.ventesJour);
       // realisation : null si la période ne contient aucun jour ouvré (pas d'objectif → pas de taux)
       const reseau = { objMois: objMoisTot, objJour: objJourTot, objSemaine: objSemaineTot, objPeriode: objPeriodeTot, ventesJourEquipes: ventesJourEq, horsEquipeJour: horsVentesJour, ventesJour: ventesJourEq + horsVentesJour,
         realisation: objPeriodeTot <= 0 ? null : pctDe(ventesJourEq + horsVentesJour, objPeriodeTot), real: CT.somme(agents, (a) => a.real), realB2C: CT.somme(agents, (a) => a.realB2C), realB2B: CT.somme(agents, (a) => a.realB2B),
         agentsAvecObjectif: CT.somme(equipes, (e) => e.agentsAvecObjectif), agentsVendeurs: CT.somme(equipes, (e) => e.agentsVendeurs), agentsAtteints: CT.somme(equipes, (e) => e.agentsAtteints),
         primeSupJour: CT.somme(equipes, (e) => e.primeSupJour), primesAgentsJour: CT.somme(agents, (a) => a.totalPrimesJour) };
-      reseau.tro = pctDe(reseau.real, partielle ? objJourTot * ouvresEcoules : objMoisTot); reseau.objADate = Math.round(objJourTot * ouvresEcoules); reseau.rythme = pctDe(reseau.real, reseau.objADate);
+      reseau.tro = pctDe(reseau.real, partielle ? plafond(objJourTot, ouvresEcoules, objMoisTot) : objMoisTot); reseau.objADate = Math.round(plafond(objJourTot, ouvresEcoules, objMoisTot)); reseau.rythme = pctDe(reseau.real, reseau.objADate);
 
       // Budget (coût du plan vs marge RGZ)
       const coutAg = { journees: CT.somme(agents, (a) => a.primesJournees), champion: CT.somme(agents, (a) => a.primesChampion), paliers: CT.somme(agents, (a) => a.primePalier), bonusB2B: CT.somme(agents, (a) => a.bonusB2B) };
@@ -223,12 +226,11 @@
       if (ecarts.length) out.push({ sujet: 'Écart de logins', constat: "Le rapport Celtiis et le fichier d'objectifs n'écrivent pas les mêmes logins : " + [...new Set(ecarts)].slice(0, 6).join(' ; ') + '.', action: "Harmoniser les logins, sinon le rapprochement dans Power BI échouera (l'outil les rapproche automatiquement)." });
       const valides = lignes.filter((l) => l.partenaire === m.prioritaire && l.jour >= jdu && l.jour <= jref && l.statut === 'VALIDE').length;
       if (valides) out.push({ sujet: 'Ventes en attente', constat: valides + ' souscription(s) ' + m.prioritaire + ' en statut VALIDE ' + (plage ? 'sur la période' : 'ce jour') + ', non comptées (seules les ventes OK le sont).', action: 'Relancer la validation Celtiis pour les intégrer au compteur.' });
-      out.push({ sujet: plage ? 'Objectif de la période' : 'Objectif du jour', constat: 'Calculé sur ' + m.nbOuvres + ' jours ouvrés (objectif du mois ÷ ' + m.nbOuvres + ')' + (plage ? ', multiplié par les ' + m.ouvresPeriode + ' jour(s) ouvré(s) de la période.' : '.'), action: 'Garder une seule convention pour tout le mois (modifiable dans Paramètres › Objectifs › calendrier).' });
-      if (!CT.objectifs.modeCalcul(m.objectifs)) {
-        const nb = m.nbOuvres, diff = m.agents.filter((x) => !x.horsObjectif && x.objMois > 0 && Math.abs(x.objJour - x.objMois / nb) > 0.01);
-        if (diff.length) { const ex = diff.slice(0, 3).map((x) => L(x.login) + ' : ' + CT.fmt.nat(x.objJour) + ' au lieu de ' + CT.fmt.nat(x.objMois / nb)).join(' ; ');
-          out.push({ sujet: 'Objectif du jour du fichier', constat: diff.length + ' vendeur(s) ont un objectif du jour (fichier d\'objectifs) différent de « objectif du mois ÷ ' + nb + ' jours ouvrés » prévu par le règlement. Exemples : ' + ex + '.', action: 'Pour suivre le règlement : Paramètres › Objectifs › Objectif journalier = « Calcul ». Sinon, garder les valeurs du fichier en connaissance de cause.' }); }
-      }
+      out.push({ sujet: plage ? 'Objectif de la période' : 'Objectif du jour', constat: CT.objectifs.modeCalcul(m.objectifs)
+        ? 'Calculé sur ' + m.nbOuvres + ' jours ouvrés (objectif du mois ÷ ' + m.nbOuvres + ')' + (plage ? ', multiplié par les ' + m.ouvresPeriode + ' jour(s) ouvré(s) de la période, sans dépasser l\'objectif du mois.' : '.')
+        : 'Objectif du jour = valeur du fichier d\'objectifs (Paramètres › Saisie des objectifs)' + (plage ? ', multipliée par les ' + m.ouvresPeriode + ' jour(s) ouvré(s) de la période, sans dépasser l\'objectif du mois.' : '.'),
+        action: 'Les ventes d\'un jour non ouvré comptent dans le total du mois, sans objectif ni prime journalière ce jour-là.' });
+      // Objectifs du jour du fichier : fournis tels quels par le client (ses propres calculs) → pas d'alerte « différent de mois ÷ jours ouvrés »
       if (m.herite) out.push({ sujet: 'Paramètres hérités', constat: 'Aucun objectif propre à ' + CT.date.libelleMois(m.cle) + " : les objectifs d'une période précédente sont utilisés.", action: 'Créer le mois dans Paramètres › Objectifs (« + Nouveau mois »).' });
       return out;
     },
@@ -451,7 +453,7 @@
           ['login', 'equipe', 'objJour', 'objSemaine', 'objJourF', 'objSemF', 'primes', 'partRgz', 'horsObjectif', 'palier'].forEach((k) => { c[k] = a[k]; });
         });
         s.equipes.forEach((e) => {
-          const c = eqs.get(e.id), objADate = e.objJour * s.ouvresEcoules, objTro = s.partielle ? objADate : e.objMois;
+          const c = eqs.get(e.id), objADate = plafond(e.objJour, s.ouvresEcoules, e.objMois), objTro = s.partielle ? objADate : e.objMois;
           const pro = (o) => (s.partielle && s.nbOuvres > 0 ? (o * s.ouvresEcoules) / s.nbOuvres : o);
           const ext = { objADate, objTro, objB2CPeriode: pro(e.objB2C), objB2BPeriode: pro(e.objB2B) };
           if (!c) { eqs.set(e.id, Object.assign({}, e, ext)); return; }
@@ -493,8 +495,8 @@
       const reseau = { objJour: r0.objJour, objSemaine: r0.objSemaine, objADate: 0, objTro: 0 };
       segs.forEach((s) => {
         sum(reseau, s.reseau, ['objMois', 'objPeriode', 'ventesJourEquipes', 'horsEquipeJour', 'ventesJour', 'real', 'realB2C', 'realB2B', 'primeSupJour', 'primesAgentsJour']);
-        reseau.objADate += s.reseau.objJour * s.ouvresEcoules;
-        reseau.objTro += s.partielle ? s.reseau.objJour * s.ouvresEcoules : s.reseau.objMois;
+        reseau.objADate += plafond(s.reseau.objJour, s.ouvresEcoules, s.reseau.objMois);
+        reseau.objTro += s.partielle ? plafond(s.reseau.objJour, s.ouvresEcoules, s.reseau.objMois) : s.reseau.objMois;
       });
       reseau.objADate = Math.round(reseau.objADate);
       reseau.tro = pctDe(reseau.real, reseau.objTro); reseau.rythme = pctDe(reseau.real, reseau.objADate);

@@ -17,7 +17,7 @@ use App\Support\OffresComptees;
  * Mêmes règles que le tableau de bord RGZ (calculs.js → motivation()) pour le mois de la date de fin :
  *   ventes comptées = statut dans regles.statuts_comptes ET offre dans regles.offres_comptees (OffresComptees) ; B2B = TYPE_CLIENT égal à regles.segment_b2b.valeur ;
  *   objectif jour = valeur du fichier, ou objectif du mois ÷ jours ouvrés (mode « calcul » ou valeur absente) ;
- *   objectif à date = arrondi(objectif jour × jours ouvrés écoulés) ; TRO = ventes du mois ÷ objectif du mois ;
+ *   objectif à date = arrondi(objectif jour × jours ouvrés écoulés), plafonné à l'objectif du mois ; TRO = ventes du mois ÷ objectif du mois ;
  *   journée réussie = jour ouvré où ventes ≥ objectif jour ; champion du jour = meilleur ratio ventes / objectif jour (tout RGZ) ;
  *   primes = palier de TRO + journées réussies + champion du jour + bonus B2B (objectif B2B atteint).
  * Paramètres d'un mois absent : ceux du mois antérieur le plus proche, calendrier lundi → vendredi (comme store.js) ;
@@ -202,7 +202,8 @@ final class AgentTableau
             }
         }
         foreach ($agents as &$a) {
-            $a['objADate'] = (int) round($a['objJour'] * $ouvresEcoules);
+            // plafonné à l'objectif du mois (79 × 22 jours ouvrés dépasserait l'objectif d'octobre)
+            $a['objADate'] = (int) round($a['objMois'] > 0 ? min($a['objJour'] * $ouvresEcoules, $a['objMois']) : $a['objJour'] * $ouvresEcoules);
             $a['tro'] = $a['objMois'] > 0 ? $a['real'] / $a['objMois'] : 0.0;
         }
         unset($a);
@@ -426,7 +427,7 @@ final class AgentTableau
 
         return [
             'nom' => $nom,
-            'mois' => ['ventes' => $real, 'objectif' => $obj, 'tro' => $obj > 0 ? round($real / $obj, 4) : 0, 'obj_a_date' => (int) round($objJour * $ouvresEcoules)],
+            'mois' => ['ventes' => $real, 'objectif' => $obj, 'tro' => $obj > 0 ? round($real / $obj, 4) : 0, 'obj_a_date' => (int) round($obj > 0 ? min($objJour * $ouvresEcoules, $obj) : $objJour * $ouvresEcoules)],
             'periode' => ['ventes' => array_sum(array_column($liste, 'ventes_periode'))],
             'membres' => $liste,
         ];

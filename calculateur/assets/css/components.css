@@ -118,6 +118,15 @@
 .topbar .crumbs b { overflow: hidden; text-overflow: ellipsis; }
 /* Ordinateur et tablette : fil d'Ariane à gauche, barre des dates TOUJOURS à droite sur la même ligne (elle se replie sur elle-même si la place manque) */
 @media (min-width: 768px) {
+  /* Barre compacte, mots entiers : « 01/10/2026 → 31/10/2026 » (Du / Au en infobulle et pour les lecteurs d'écran), boutons resserrés */
+  .topbar .filtres-ligne .field label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .topbar .filtres-ligne .field:first-child::after { content: "→"; color: var(--text-3); margin-left: var(--sp-2); }
+  .topbar .filtres-ligne .input { width: 116px; padding: 0 4px; }
+  .topbar .date-filters.filtres-ligne { gap: var(--sp-2) var(--sp-2); }
+  .topbar .filtres-ligne .pb-groupe { padding-left: var(--sp-2); gap: var(--sp-2); }
+  .topbar .pb-btn { padding: 0 7px; }
+  .topbar .pb-btns { padding: 2px; }
+  .topbar .pb-select { max-width: 126px; padding-right: 22px; }
   .topbar { flex-wrap: nowrap; }
   .topbar .crumbs { flex: 0 1 auto; min-width: 110px; }
   .topbar .crumbs b { white-space: nowrap; }
