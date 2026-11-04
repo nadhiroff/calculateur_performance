@@ -28,14 +28,34 @@ final class HistoriqueVentes
     {
         $cfg = self::configuration(json_decode((string) json_encode($cfgPartenaires), true) ?: []);
         $h = $cfg['historique'] ?? [];
-        $annee = (int) ($h['annee'] ?? date('Y'));
+        $anneeSaisie = (int) ($h['annee'] ?? date('Y'));
+        // L'année suit les DONNÉES : année du mois le plus récent en base (2027, 2028…), jamais en arrière de l'année saisie
+        $dernierMois = (string) (Db::value('SELECT MAX(`mois`) FROM `celtiis_datas`') ?? '');
+        $annee = max($anneeSaisie, $dernierMois !== '' ? (int) substr($dernierMois, 0, 4) : 0);
         $mois = $h['mois'] ?? ['Janv', 'Févr', 'Mars', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sept', 'Oct', 'Nov', 'Déc'];
-        $partenaires = $h['partenaires'] ?? [];
+        // Valeurs saisies à la main : elles appartiennent à l'année saisie (mois sans données en base, avant la mise en service)
+        $saisies = $h['partenaires'] ?? [];
+        [$partenaires, $auto] = self::fusionner($annee === $anneeSaisie ? $saisies : [], self::reel($annee, $cfg));
+        // Année précédente : « mois précédent » de janvier (= décembre), consultation des mois de l'an passé
+        [$partPrec] = self::fusionner($annee - 1 === $anneeSaisie ? $saisies : [], self::reel($annee - 1, $cfg));
 
-        // Calcul en base, gardé en cache : renouvelé à chaque import et à chaque modification des paramètres (logins, agences, offres…)
-        $reel = Cache::memoriser('historique-v2:'.$annee.':'.md5((string) json_encode([$cfg['logins_partenaire'] ?? [], $cfg['remplacements_login'] ?? [], $cfg['regles_agence'] ?? [], $cfg['defaut'] ?? null])).':'.Cache::version(), 600,
+        return ['annee' => $annee, 'mois' => $mois, 'partenaires' => $partenaires, 'auto' => $auto, 'precedente' => ['annee' => $annee - 1, 'partenaires' => $partPrec]];
+    }
+
+    /** Ventes en base d'une année (cache renouvelé à chaque import et à chaque modification des paramètres partenaires). */
+    private static function reel(int $annee, array $cfg): array
+    {
+        return Cache::memoriser('historique-v2:'.$annee.':'.md5((string) json_encode([$cfg['logins_partenaire'] ?? [], $cfg['remplacements_login'] ?? [], $cfg['regles_agence'] ?? [], $cfg['defaut'] ?? null])).':'.Cache::version(), 600,
             static fn () => self::ventesEnBase($annee, $cfg));
+    }
 
+    /**
+     * Valeurs saisies complétées par les ventes en base (un mois présent en base remplace la saisie).
+     *
+     * @return array{0: array<string, list<int>>, 1: list<bool>}  [partenaire → 12 valeurs, mois calculés automatiquement]
+     */
+    private static function fusionner(array $partenaires, array $reel): array
+    {
         $auto = array_fill(0, 12, false);
         foreach ($reel as $m => $parPartenaire) {
             $i = (int) $m - 1;
@@ -54,7 +74,7 @@ final class HistoriqueVentes
         unset($v);
         ksort($partenaires);
 
-        return ['annee' => $annee, 'mois' => $mois, 'partenaires' => $partenaires, 'auto' => $auto];
+        return [$partenaires, $auto];
     }
 
     /**

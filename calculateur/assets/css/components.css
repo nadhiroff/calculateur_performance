@@ -36,6 +36,20 @@
 .nav-tabs a[aria-current="page"] i { color: #7FA2FF; }
 .nav-tabs a[aria-current="page"]::before { content: ""; position: absolute; left: -12px; top: 9px; bottom: 9px; width: 3px; border-radius: 0 3px 3px 0; background: #7FA2FF; }
 .sidebar .brand[aria-current], .sidebar .brand:hover { background: none; }
+/* Menu repliable avec sous-menus (« Facturation ») : <details> ; les sous-liens restent des liens #nav a[data-vue] */
+.nav-group > summary {
+  position: relative; display: flex; align-items: center; gap: var(--sp-3); min-height: 40px; padding: 0 var(--sp-3); list-style: none; cursor: pointer;
+  border-radius: var(--r-md); color: var(--side-text); font-weight: 600; font-size: var(--fs-14); transition: background var(--t-fast), color var(--t-fast);
+}
+.nav-group > summary::-webkit-details-marker { display: none; }
+.nav-group > summary i { width: 18px; text-align: center; font-size: 15px; color: var(--side-muted); }
+.nav-group > summary::after { content: "\f078"; font-family: "Font Awesome 6 Free"; font-weight: 900; font-size: 10px; margin-left: auto; color: var(--side-muted); transition: transform var(--t-fast); }
+.nav-group[open] > summary::after { transform: rotate(180deg); }
+.nav-group > summary:hover { background: var(--side-hover); color: #fff; }
+.nav-group > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.nav-group > a { margin-left: var(--sp-5); font-size: var(--fs-13); min-height: 36px; white-space: normal; line-height: 1.3; padding-top: 6px; padding-bottom: 6px; }   /* libellé long : sur 2 lignes, surbrillance complète */
+.nav-group > a[aria-current="page"]::before { left: calc(-12px - var(--sp-5)); }
+.nav-group:has(> a[aria-current="page"]) > summary, .nav-group:has(> a[aria-current="page"]) > summary i { color: #fff; }   /* groupe de la rubrique ouverte */
 /* Administrateur connecté + déconnexion (au-dessus du pied de menu) */
 .nav-user { margin-top: auto; display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2); border-radius: var(--r-md); background: var(--side-hover); border: 1px solid var(--side-border); }
 .nav-user-ic { flex: none; width: 32px; height: 32px; border-radius: var(--r-sm); display: grid; place-items: center; background: rgba(255, 255, 255, .08); color: var(--side-text); font-size: var(--fs-13); }
@@ -84,6 +98,50 @@
 .date-filters .field label { font-size: var(--fs-13); font-weight: 500; color: var(--text-3); white-space: nowrap; }
 .date-filters .input { width: 150px; }
 #filter-status { padding-bottom: var(--sp-3); margin: 0 !important; }
+/* Barre « Période / Vue » (raccourcis des 3 derniers mois en base, découpage des graphiques) : boutons segmentés compacts */
+.periode-barre { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-6); padding: 0 0 var(--sp-3); }
+.pb-groupe { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.pb-lib { font-size: var(--fs-12); font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+.pb-btns { display: inline-flex; gap: 2px; padding: 3px; background: var(--surface-3); border-radius: var(--r-md); max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.pb-btn { flex: none; min-height: 28px; padding: 0 var(--sp-3); border: 0; background: none; border-radius: var(--r-sm); font-weight: 600; font-size: var(--fs-13); color: var(--text-3); cursor: pointer; white-space: nowrap; transition: background var(--t-fast), color var(--t-fast); }
+.pb-btn:hover { color: var(--text); }
+.pb-btn[aria-pressed="true"] { background: var(--surface); color: var(--primary-600); box-shadow: var(--shadow-sm); }
+.pb-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+/* En-tête : dates, réinitialisation, période et vue sur UNE ligne compacte (passe à la ligne proprement si l'écran est étroit) */
+.date-filters.filtres-ligne { margin-left: 0; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); padding: 0 0 var(--sp-3); }
+/* Dans la ligne du haut, à droite du fil d'Ariane : s'il manque de place, la barre entière passe dessous (alignée à droite), sans chevauchement */
+.topbar .date-filters.filtres-ligne { margin-left: auto; padding: 0; justify-content: flex-end; flex: 0 1 auto; gap: var(--sp-2) var(--sp-3); }
+.app-header > .container { max-width: none; }                        /* l'en-tête prend toute la largeur : plus de place pour la barre */
+.topbar .pb-select { max-width: 140px; }
+@media (max-width: 1699px) { .topbar .crumbs > span, .topbar .crumbs > i { display: none; } }   /* « POWERGZ » est déjà en haut du menu */
+.topbar .crumbs { flex: 0 1 auto; min-width: 0; }
+.topbar .crumbs b { overflow: hidden; text-overflow: ellipsis; }
+/* Ordinateur et tablette : fil d'Ariane à gauche, barre des dates TOUJOURS à droite sur la même ligne (elle se replie sur elle-même si la place manque) */
+@media (min-width: 768px) {
+  .topbar { flex-wrap: nowrap; }
+  .topbar .crumbs { flex: 0 1 auto; min-width: 110px; }
+  .topbar .crumbs b { white-space: nowrap; }
+  .topbar .date-filters.filtres-ligne { flex: 0 1 auto; min-width: 0; }
+}
+.filtres-ligne .input { width: 128px; }
+.filtres-ligne .periode-barre { display: contents; }                 /* ses groupes s'alignent sur la même ligne que les dates */
+.filtres-ligne .pb-lib { display: none; }                             /* « Période » / « Vue » : en infobulle et pour les lecteurs d'écran */
+.filtres-ligne .pb-groupe { padding-left: var(--sp-3); border-left: 1px solid var(--border); }
+.btn-icone { width: 34px; min-width: 34px; padding: 0; justify-content: center; }
+.pb-select { width: auto; max-width: 160px; }
+/* Téléphone : 3 lignes courtes — « Du [date] Au [date] ↺ » · boutons des mois · « [Autre période] [Jour | Semaine | Mois] » */
+@media (max-width: 767px) {
+  .date-filters.filtres-ligne { gap: var(--sp-2); }
+  .topbar .date-filters.filtres-ligne { flex: 1 1 100%; margin-left: 0; justify-content: flex-start; }
+  .filtres-ligne .field { flex: 1 1 0; min-width: 0; flex-direction: row; align-items: center; gap: 6px; }
+  .filtres-ligne .field label { flex: none; }
+  .filtres-ligne .input { width: 100%; min-width: 0; padding: 0 6px; }
+  .filtres-ligne .pb-groupe:first-child { display: contents; }          /* boutons des mois et « Autre période » deviennent des éléments de la ligne */
+  .filtres-ligne #pb-periodes { flex: 1 1 100%; flex-wrap: nowrap; overflow-x: auto; min-width: 0; }
+  .filtres-ligne #pb-periodes .pb-btn { flex: 1 0 auto; }
+  .filtres-ligne .pb-select { flex: 1 1 0; min-width: 0; max-width: none; }
+  .filtres-ligne #pb-vue { flex: 0 0 auto; padding-left: 0; border-left: 0; }
+}
 #filter-status:empty { display: none; }
 
 /* ---- Navigation mobile : sidebar en tiroir ---- */
@@ -117,6 +175,10 @@
   .date-filters .field label { font-size: var(--fs-12); }
   .date-filters .input { width: 100%; min-width: 0 !important; min-inline-size: 0 !important; max-width: 100%; box-sizing: border-box; -webkit-appearance: none; appearance: none; font-size: 16px; }
   .date-filters #reset-filters { grid-column: 1 / -1; justify-content: center; }
+  /* Ligne compacte (dates + période + vue) : « Du [date] Au [date] ↺ » sur une ligne, libellés à gauche des champs */
+  .date-filters.filtres-ligne { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+  .filtres-ligne .field { flex: 1 1 0; flex-direction: row; align-items: center; gap: 6px; }
+  .filtres-ligne #reset-filters { grid-column: auto; flex: none; }
 }
 
 /* ---- Boutons ---- */

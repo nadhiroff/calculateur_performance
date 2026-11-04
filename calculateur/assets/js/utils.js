@@ -202,13 +202,13 @@
     if (!ws || !ws['!ref'] || !window.XLSX) return ws;
     const rg = XLSX.utils.decode_range(ws['!ref']);
     // Lignes de total : gras, fond bleu clair, filet supérieur ; le format numérique de la cellule est conservé
-    const filet = { style: 'medium', color: { rgb: '1D3FA8' } };
+    const filet = { style: 'medium', color: { rgb: '6B7280' } };   // lignes de total : gras sur fond gris, comme les en-têtes
     for (let r = rg.s.r + 1; r <= rg.e.r; r++) {
       const l = [rg.s.c, rg.s.c + 1, rg.s.c + 2].map((c) => ws[XLSX.utils.encode_cell({ r, c })]).find((x) => x && /^(total|réseau|coût total)/i.test(String(x.v)));
       if (!l) continue;
       for (let c = rg.s.c; c <= rg.e.c; c++) {
         const a = XLSX.utils.encode_cell({ r, c }); if (!ws[a]) ws[a] = { t: 's', v: '' };
-        ws[a].s = Object.assign({ font: { bold: true, color: { rgb: '0B1B3A' } }, fill: { patternType: 'solid', fgColor: { rgb: 'DCE6F7' } }, border: { top: filet } }, ws[a].z ? { numFmt: ws[a].z } : {});
+        ws[a].s = Object.assign({ font: { bold: true, color: { rgb: '111827' } }, fill: { patternType: 'solid', fgColor: { rgb: 'D9D9D9' } }, border: { top: filet } }, ws[a].z ? { numFmt: ws[a].z } : {});
       }
     }
     return ws;
@@ -224,4 +224,31 @@
   CT.slug = (s) => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '');
   CT.clone = (o) => JSON.parse(JSON.stringify(o));
   CT.somme = (a, f) => a.reduce((s, x) => s + (f ? f(x) : x), 0);
+
+  /* Menu latéral (#nav) : garde sa position de défilement d'une page à l'autre (index.php ↔ parametres.php),
+     puis s'assure que l'entrée active reste visible. Mémorisé pour l'onglet du navigateur seulement (sessionStorage). */
+  (() => {
+    const CLE = 'ct_nav_scroll';
+    const restaurer = () => {
+      const n = document.getElementById('nav'); if (!n) return;
+      try { const v = +sessionStorage.getItem(CLE); if (v) n.scrollTop = v; } catch (e) { /* stockage indisponible */ }
+      const actif = n.querySelector('[aria-current="page"]');
+      if (actif) { const a = actif.getBoundingClientRect(), b = n.getBoundingClientRect(); if (a.top < b.top || a.bottom > b.bottom) actif.scrollIntoView({ block: 'nearest' }); }
+    };
+    // Groupes du menu (Facturation, Point du jour, Paramètres…) : ouverts / fermés comme on les a laissés, d'une page à l'autre
+    const CLE_G = 'ct_nav_groupes', lireG = () => { try { return JSON.parse(sessionStorage.getItem(CLE_G) || '{}'); } catch (e) { return {}; } };
+    document.addEventListener('DOMContentLoaded', () => {
+      const n = document.getElementById('nav'); if (!n) return;
+      const g0 = lireG();
+      n.querySelectorAll('details.nav-group[data-groupe]').forEach((d) => {
+        const k = d.dataset.groupe;
+        const pageDuGroupe = d.querySelector('[aria-current="page"]') || (k === 'parametres' && /parametres\.php$/.test(location.pathname));
+        if (k in g0 && !pageDuGroupe) d.open = g0[k];   // le groupe de la page affichée reste ouvert
+        d.addEventListener('toggle', () => { const g = lireG(); g[k] = d.open; try { sessionStorage.setItem(CLE_G, JSON.stringify(g)); } catch (e) { /* stockage indisponible */ } });
+      });
+      restaurer();
+      n.addEventListener('scroll', () => { try { sessionStorage.setItem(CLE, String(n.scrollTop)); } catch (e) { /* stockage indisponible */ } }, { passive: true });
+    });
+    window.addEventListener('load', () => setTimeout(restaurer, 50));   // après l'ouverture des groupes du menu actif
+  })();
 })();

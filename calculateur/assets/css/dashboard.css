@@ -11,7 +11,7 @@ main { padding: var(--sp-6) 0 var(--sp-16); }
 .section-title h2 { font-size: var(--fs-16); }
 .section-title p { color: var(--text-3); font-size: var(--fs-13); }
 .stack { display: grid; gap: var(--sp-5); }
-.stack > *, details.comparatif > * { min-width: 0; }   /* les tableaux larges défilent dans leur cadre au lieu d'élargir la page */
+.stack > *, .comparatif > * { min-width: 0; }   /* les tableaux larges défilent dans leur cadre au lieu d'élargir la page */
 .grid-kpi { display: grid; gap: var(--sp-4); grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 .grid-2 { display: grid; gap: var(--sp-5); grid-template-columns: 1fr; } @media (min-width: 900px) { .grid-2 { grid-template-columns: 1fr 1fr; } }
 .grid-3 { display: grid; gap: var(--sp-5); grid-template-columns: 1fr; } @media (min-width: 768px) { .grid-3 { grid-template-columns: repeat(2, 1fr); } } @media (min-width: 1200px) { .grid-3 { grid-template-columns: repeat(3, 1fr); } }
@@ -253,6 +253,22 @@ main { padding: var(--sp-6) 0 var(--sp-16); }
 .en-clair p { margin: 0; font-size: var(--fs-16); line-height: 1.55; color: var(--text); }
 
 .grid-tuiles { display: grid; gap: var(--sp-4); grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+/* Pages Facturation / Point financier / Reports : cartes plus larges (1 par ligne sur téléphone, 2 sur tablette, 4 sur ordinateur) */
+.grid-tuiles.fact-tuiles { grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); }
+.fact-source { margin-bottom: var(--sp-5); }
+/* Tableau « Objectifs du mois » (Point du jour) : lignes d'équipe sur fond gris, total en gras */
+.objectifs-mois .ligne-equipe td { background: var(--surface-2); }
+.objectifs-mois { min-width: 640px; }
+.objectifs-mois tfoot th, .objectifs-mois tfoot td { background: var(--surface-3); font-weight: 700; border-top: 2px solid var(--border-strong); padding: 6px; }
+/* Grand titre de partie (page Comparaisons) */
+.titre-section { font-family: var(--font-title); font-size: 1.35rem; font-weight: 800; color: var(--text); margin: var(--sp-4) 0 var(--sp-3); padding: var(--sp-2) var(--sp-3); border-left: 5px solid var(--primary-600); background: var(--primary-soft); border-radius: 0 var(--r-md) var(--r-md) 0; }
+[data-rub]:first-of-type > .titre-section { margin-top: 0; }
+.stack > .titre-section { margin: var(--sp-4) 0 0; }   /* dans une pile : l'espacement vient de la pile */
+.stack > [data-rub]:first-child > .titre-section { margin-top: 0; }
+/* Facture (modèle Facture_exemple.pdf) : sur petit écran le tableau défile dans son cadre au lieu de couper les mots */
+.table-compact.facture { min-width: 620px; }
+.table-compact.facture-tva { min-width: 440px; }
+.table-compact.facture th, .table-compact.facture td.num { white-space: nowrap; overflow-wrap: normal; }
 .tuile { min-width: 0; padding: var(--sp-4) var(--sp-5); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--shadow-xs); display: grid; gap: var(--sp-2); border-top: 4px solid var(--border-strong); }
 .tuile.pos { border-top-color: var(--pos); } .tuile.info { border-top-color: var(--info); } .tuile.warn { border-top-color: var(--warn); } .tuile.neg { border-top-color: var(--neg); }
 .tuile-head { display: flex; align-items: center; gap: var(--sp-2); }
@@ -334,9 +350,11 @@ details.comparatif > summary { cursor: pointer; font-weight: 600; list-style: no
 details.comparatif > summary::before { content: "▸"; color: var(--text-3); transition: transform var(--t-fast); }
 details.comparatif[open] > summary::before { transform: rotate(90deg); }
 details.comparatif[open] > summary { margin-bottom: var(--sp-4); }
-details.comparatif h4 { margin-bottom: var(--sp-2); }
-details.comparatif h5 { font-size: var(--fs-13); margin: 0 0 var(--sp-2); }
+.comparatif > h3 { display: flex; gap: var(--sp-2); align-items: center; margin-bottom: var(--sp-4); }
+.comparatif h4 { margin-bottom: var(--sp-2); }
+.comparatif h5 { font-size: var(--fs-13); margin: 0 0 var(--sp-2); }
 @media print { .subtabs { display: none; } }
+.subtabs { display: none; }   /* rubriques choisies dans le sidebar (sous-menus Point du jour / Performance) */
 
 /* Résumé du Point du jour, podium, équipes, actions, barème, gains */
 .txt-neg { color: var(--neg-text); font-weight: 700; }

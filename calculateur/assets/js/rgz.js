@@ -54,21 +54,21 @@
           <div class="rgz-hero-txt"><span class="eyebrow">Partenaire ${CT.esc(pr)}</span>
             <h2>${mn(ok.length)} ventes validées</h2>
             <p>${periode} · ${mn(b2c)} particuliers (B2C) · ${mn(b2b)} entreprises (B2B)</p></div>
-          <div class="rgz-hero-obj"><span>Objectif de la période</span><b class="num">${obj.taux == null ? '—' : CT.fmt.pct(obj.taux, 0)}</b>${CT.ui.jauge(obj.taux || 0, 'Objectif de la période')}<small>${mn(obj.real)} / ${mn(obj.objectif)} ventes · ${perObj}</small></div>
+          <div class="rgz-hero-obj"><span>Objectif de la période</span><b class="num">${obj.taux == null ? '—' : CT.fmt.pct(obj.taux, 0)}</b>${CT.ui.jauge(obj.taux || 0, 'Objectif de la période')}<small>${mn(obj.real)} / ${CT.fmt.nat(obj.objectif)} ventes · ${perObj}</small></div>
         </section>
         ${obj.objectif <= 0 ? CT.ui.enClair(`${CT.esc(pr)} a fait <b>${mn(obj.real)}</b> vente(s) ${perObj}. L'avance ou le retard ne peut pas être calculé : aucun jour ouvré sur la période ou objectifs du jour non renseignés (Paramètres › Objectifs).`, 'fa-circle-info') : CT.ui.enClair(ecart >= 0
-          ? `<b>Bonne nouvelle :</b> ${CT.esc(pr)} est <b>en avance de ${mn(ecart)} vente(s)</b> sur l'objectif de la période (${mn(obj.objectif)} attendues ${perObj}).`
-          : `<b>Attention :</b> ${CT.esc(pr)} a <b>${mn(-ecart)} vente(s) de retard</b> sur l'objectif de la période (${mn(obj.objectif)} attendues ${perObj}, ${mn(obj.real)} faites).`, ecart >= 0 ? 'fa-face-smile' : 'fa-triangle-exclamation')}
+          ? `<b>Bonne nouvelle :</b> ${CT.esc(pr)} est <b>en avance de ${mn(ecart)} vente(s)</b> sur l'objectif de la période (${CT.fmt.nat(obj.objectif)} attendues ${perObj}).`
+          : `<b>Attention :</b> ${CT.esc(pr)} a <b>${mn(-ecart)} vente(s) de retard</b> sur l'objectif de la période (${CT.fmt.nat(obj.objectif)} attendues ${perObj}, ${mn(obj.real)} faites).`, ecart >= 0 ? 'fa-face-smile' : 'fa-triangle-exclamation')}
         <div class="grid-tuiles">
           ${CT.ui.tuile({ icone: 'fa-calendar-day', ton: CT.ui.tonDe(r.objJour ? r.ventesJour / r.objJour : null), titre: 'Aujourd\'hui (' + CT.date.court(e.jourRef) + ')', valeur: r.objJour ? mn(r.ventesJour) + ' / ' + mn(r.objJour) : mn(r.ventesJour), p: r.objJour ? r.ventesJour / r.objJour : null, aide: r.objJour ? 'Ventes du jour / objectif du jour' : 'Ventes du jour · objectif du jour non renseigné' })}
-          ${CT.ui.tuile({ icone: 'fa-calendar-week', ton: CT.ui.tonDe(sem.objectif ? sem.ventes / sem.objectif : null), titre: 'Semaine', valeur: sem.objectif ? mn(sem.ventes) + ' / ' + mn(sem.objectif) : mn(sem.ventes), p: sem.objectif ? sem.ventes / sem.objectif : null, aide: 'Du ' + CT.date.court(sem.du) + ' au ' + CT.date.court(e.jourRef) + (sem.objectif ? '' : ' · objectif non renseigné') })}
-          ${CT.ui.tuile({ icone: 'fa-calendar', ton: CT.ui.tonDe(obj.taux), titre: 'Objectif de la période', valeur: mn(obj.real) + ' / ' + mn(obj.objectif), p: obj.taux, aide: 'Mois de ' + CT.date.libelleMois(e.cle).toLowerCase() + ' : ' + mn(r.real) + ' / ' + mn(r.objMois) + ' au ' + CT.date.court(e.jourRef) })}
+          ${CT.ui.tuile({ icone: 'fa-calendar-week', ton: CT.ui.tonDe(sem.objectif ? sem.ventes / sem.objectif : null), titre: 'Semaine', valeur: sem.objectif ? mn(sem.ventes) + ' / ' + CT.fmt.nat(sem.objectif) : mn(sem.ventes), p: sem.objectif ? sem.ventes / sem.objectif : null, aide: 'Du ' + CT.date.court(sem.du) + ' au ' + CT.date.court(e.jourRef) + (sem.objectif ? '' : ' · objectif non renseigné') })}
+          ${CT.ui.tuile({ icone: 'fa-calendar', ton: CT.ui.tonDe(obj.taux), titre: 'Objectif de la période', valeur: mn(obj.real) + ' / ' + CT.fmt.nat(obj.objectif), p: obj.taux, aide: 'Mois de ' + CT.date.libelleMois(e.cle).toLowerCase() + ' : ' + mn(r.real) + ' / ' + mn(r.objMois) + ' au ' + CT.date.court(e.jourRef) })}
           ${CT.ui.tuile({ icone: 'fa-coins', ton: 'pos', titre: 'Commissions de la période', valeur: CT.fmt.fcfa(cp.total.commissions), aide: 'Dont ' + CT.fmt.fcfa(cp.total.partenaire) + ' pour ' + CT.esc(pr) })}
           ${CT.ui.tuile({ icone: 'fa-medal', ton: 'warn', titre: 'Primes de la période', valeur: CT.fmt.fcfa(cp.total.primes), aide: cp.mode === 'periode' ? 'Gagnées jour par jour (journées réussies, champion)' : 'Journées, champion, paliers et bonus à date' })}
           ${CT.ui.tuile({ icone: 'fa-hourglass-half', ton: k.valide ? 'warn' : '', titre: 'En attente', valeur: mn(k.valide), aide: 'Ventes pas encore validées (statut VALIDE)' })}
         </div>
         <div class="grid-2">
-          <section class="card"><div class="card-head"><div><h3>Ventes ${CT.esc(pr)} par jour</h3><p>Ventes validées ${periode}</p></div></div><div class="chart-box"><canvas id="rgz-ch-jour" role="img" aria-label="Ventes ${CT.esc(pr)} par jour"></canvas></div></section>
+          <section class="card"><div class="card-head"><div><h3>Ventes ${CT.esc(pr)} par ${CT.etat.gran || 'jour'}</h3><p>Ventes validées ${periode}</p></div></div><div class="chart-box"><canvas id="rgz-ch-jour" role="img" aria-label="Ventes ${CT.esc(pr)} par jour"></canvas></div></section>
           <section class="card"><div class="card-head"><div><h3>Particuliers ou entreprises ?</h3><p>Répartition des ventes validées</p></div></div><div class="chart-box"><canvas id="rgz-ch-seg" role="img" aria-label="Répartition B2C / B2B"></canvas></div></section>
         </div>
         <div class="grid-2">
@@ -96,11 +96,12 @@
       // Graphiques
       const jours = new Map();
       ok.forEach((l) => { const g = jours.get(l.jour) || { b2c: 0, b2b: 0 }; if (l.segment === 'B2B') g.b2b++; else g.b2c++; jours.set(l.jour, g); });
-      const cles = [...jours.keys()].sort(), c1 = jeton('--series-1'), c2 = jeton('--accent-rgz'), surface = jeton('--surface');
+      // Vue Jour / Semaine / Mois (barre de l'en-tête)
+      const grp = CT.analyseCalc.regrouper([...jours.entries()].map(([jour, g]) => ({ jour, b2c: g.b2c, b2b: g.b2b })), CT.etat.gran || 'jour'), c1 = jeton('--series-1'), c2 = jeton('--accent-rgz'), surface = jeton('--surface');
       const barres = { borderRadius: 3, borderSkipped: false, maxBarThickness: 26, borderColor: surface, borderWidth: { top: 1 } };
-      chart('rgz-ch-jour', { type: 'bar', data: { labels: cles.map((j) => CT.date.court(j).slice(0, 5)), datasets: [
-        Object.assign({ label: 'B2C (particuliers)', data: cles.map((j) => jours.get(j).b2c), backgroundColor: c1 }, barres),
-        Object.assign({ label: 'B2B (entreprises)', data: cles.map((j) => jours.get(j).b2b), backgroundColor: c2 }, barres)] },
+      chart('rgz-ch-jour', { type: 'bar', data: { labels: grp.map((g) => g.lib), datasets: [
+        Object.assign({ label: 'B2C (particuliers)', data: grp.map((g) => g.b2c || 0), backgroundColor: c1 }, barres),
+        Object.assign({ label: 'B2B (entreprises)', data: grp.map((g) => g.b2b || 0), backgroundColor: c2 }, barres)] },
         options: { plugins: { legend: { position: 'bottom' } }, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } } });
       chart('rgz-ch-seg', { type: 'doughnut', data: { labels: ['B2C (particuliers)', 'B2B (entreprises)'], datasets: [{ data: [b2c, b2b], backgroundColor: [c1, c2], borderColor: surface, borderWidth: 2 }] },
         options: { cutout: '62%', plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: (c) => ' ' + c.label + ' : ' + mn(c.parsed) + ' (' + CT.fmt.pct(ok.length ? c.parsed / ok.length : 0, 0) + ')' } } } } });
@@ -110,7 +111,7 @@
       const d = donnees();
       return ['Tableau de bord ' + d.pr + ' — du ' + CT.date.court(d.p.du) + ' au ' + CT.date.court(d.p.au),
         '• Ventes validées : ' + CT.fmt.int(d.ok.length) + ' (' + CT.fmt.int(d.b2c) + ' B2C, ' + CT.fmt.int(d.b2b) + ' B2B)',
-        '• Objectif de la période : ' + CT.fmt.int(d.obj.real) + ' / ' + CT.fmt.int(d.obj.objectif) + (d.obj.taux == null ? '' : ' (' + CT.fmt.pct(d.obj.taux) + ')'),
+        '• Objectif de la période : ' + CT.fmt.int(d.obj.real) + ' / ' + CT.fmt.nat(d.obj.objectif) + (d.obj.taux == null ? '' : ' (' + CT.fmt.pct(d.obj.taux) + ')'),
         '• Commissions de la période : ' + CT.fmt.fcfa(d.cp.total.commissions) + ' · primes : ' + CT.fmt.fcfa(d.cp.total.primes)].map(CT.fmt.txt).join('\n');
     },
     feuilles() {

@@ -31,6 +31,7 @@
       barre.append(...boutons);
       function ouvrir(id, parClic) {
         actif = id; ecrire(cle, id);
+        document.dispatchEvent(new CustomEvent('ct:onglet', { detail: { cle, id } }));   // le sidebar suit la rubrique ouverte
         onglets.forEach((o, i) => { const sel = o.id === id; boutons[i].setAttribute('aria-selected', String(sel)); boutons[i].tabIndex = sel ? 0 : -1; });
         zone.setAttribute('aria-labelledby', 'tab-' + cle + '-' + id);
         zone.replaceChildren();

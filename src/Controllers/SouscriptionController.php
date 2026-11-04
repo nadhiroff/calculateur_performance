@@ -27,13 +27,12 @@ final class SouscriptionController
         $mois = Db::select('SELECT `mois`, COUNT(*) AS nb, MIN(`jour`) AS du, MAX(`jour`) AS au FROM `celtiis_datas` GROUP BY `mois` ORDER BY `mois`');
         $dernier = Import::dernierReussi('souscriptions');
 
+        // Période par défaut = le mois le plus récent présent en base (du 1er à la dernière date en base), quel que soit
+        // le dernier fichier importé : réimporter un fichier plus ancien ne doit pas ramener l'affichage en arrière.
         $defaut = null;
-        if ($dernier && ! empty($dernier['stats']['au'])) {
-            $au = $dernier['stats']['au'];
-            $defaut = ['du' => max($dernier['stats']['du'] ?? $au, substr($au, 0, 7).'-01'), 'au' => $au, 'source' => 'dernier_import'];
-        } elseif ($mois) {
+        if ($mois) {
             $derniereLigne = $mois[array_key_last($mois)];
-            $defaut = ['du' => $derniereLigne['du'], 'au' => $derniereLigne['au'], 'source' => 'dernier_mois'];
+            $defaut = ['du' => $derniereLigne['mois'].'-01', 'au' => $derniereLigne['au'], 'source' => 'derniere_donnee'];
         }
 
         return Response::json([

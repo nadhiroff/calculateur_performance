@@ -11,7 +11,10 @@
 
   function contexte() {
     const e = CT.etat, vue = e.vue;
-    if (vue === 'rgz') return { vue, mod: CT.rgz, titre: 'Tableau de bord ' + e.prioritaire, el: document.getElementById('view-rgz'), sujet: 'Tableau de bord ' + e.prioritaire + ' ' + CT.date.court(e.jourRef), nom: 'Tableau_de_bord_' + e.prioritaire + '_' + e.jourRef };
+    // Pages Facturation, Challenge, Comparaisons, Prévisions : chaque module fournit ses feuilles et son résumé
+    const m = (CT.factUI && CT.factUI.module && CT.factUI.module(vue)) || (CT.analyseUI && CT.analyseUI.module && CT.analyseUI.module(vue));
+    if (m) return { vue, mod: m, titre: m.titre, el: document.getElementById('view-' + vue), sujet: m.titre + ' ' + CT.date.court(e.jourRef), nom: m.nom + '_' + e.jourRef };
+    if (vue === 'rgz') return { vue, mod: { feuilles: () => CT.rgz.feuilles().concat(CT.analyseUI ? CT.analyseUI.feuillesRgz() : []), resume: () => CT.rgz.resume() }, titre: 'Tableau de bord ' + e.prioritaire, el: document.getElementById('view-rgz'), sujet: 'Tableau de bord ' + e.prioritaire + ' ' + CT.date.court(e.jourRef), nom: 'Tableau_de_bord_' + e.prioritaire + '_' + e.jourRef };
     if (vue === 'pointjour') return { vue, mod: CT.pointJour, titre: 'Point du jour', el: document.getElementById('view-pointjour'), sujet: 'Point du jour ' + (e.jourDu ? CT.periode.texte() : CT.date.court(e.jourRef)), nom: 'Point_du_jour_' + CT.periode.fichier() };
     if (vue === 'perf') return { vue, mod: CT.perf, titre: 'Performance partenaires', el: document.getElementById('view-perf'), sujet: 'Performance partenaires ' + CT.date.libelleMois(e.cle) + (CT.periode.perfPartielle() ? ' (' + CT.periode.perf() + ')' : ''), nom: 'Performance_partenaire_' + CT.periode.fichierPerf() };
     return { vue: 'dashboard', mod: CT.dashboard, titre: 'Tableau de bord', el: document.getElementById('view-dashboard'), sujet: 'Rapport souscriptions ' + CT.date.court(e.jourRef), nom: 'Rapport_souscriptions_' + e.jourRef };

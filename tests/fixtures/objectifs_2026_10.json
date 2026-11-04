@@ -1,0 +1,441 @@
+{
+    "periode": "2026-10",
+    "calendrier": {
+        "ouvres": [
+            1,
+            2,
+            5,
+            6,
+            7,
+            8,
+            9,
+            12,
+            13,
+            14,
+            15,
+            16,
+            19,
+            20,
+            21,
+            22,
+            23,
+            26,
+            27,
+            28,
+            29,
+            30
+        ]
+    },
+    "commission_one_shot": {
+        "b2b": 12000,
+        "b2c": 10000
+    },
+    "equipes": [
+        {
+            "id": "YANKEE",
+            "jour": 16,
+            "semaine": 79,
+            "logins": [
+                {
+                    "login": "pms_rgz_tosee.ftth",
+                    "b2c": 30,
+                    "b2b": 14,
+                    "jour": 2,
+                    "semaine": 11,
+                    "primes": true
+                },
+                {
+                    "login": "pvt_rgz_mfrancois.ftth",
+                    "b2c": 40,
+                    "b2b": 5,
+                    "jour": 2,
+                    "semaine": 11,
+                    "primes": true
+                },
+                {
+                    "login": "pvt_rgz_fadji.ftth",
+                    "b2c": 30,
+                    "b2b": 4,
+                    "jour": 2,
+                    "semaine": 9,
+                    "primes": true
+                },
+                {
+                    "login": "pvt_rgz_dcharmelie.ftth",
+                    "b2c": 25,
+                    "b2b": 3,
+                    "jour": 1,
+                    "semaine": 7,
+                    "primes": true
+                },
+                {
+                    "login": "pvt_rgz_gkohla.ftth",
+                    "b2c": 30,
+                    "b2b": 6,
+                    "jour": 2,
+                    "semaine": 9,
+                    "primes": true
+                },
+                {
+                    "login": "pvt_rgz_rclotoe.ftth",
+                    "b2c": 25,
+                    "b2b": 5,
+                    "jour": 2,
+                    "semaine": 8,
+                    "primes": true
+                },
+                {
+                    "login": "pvt_rgz_aconstant.ftth",
+                    "b2c": 20,
+                    "b2b": 5,
+                    "jour": 1,
+                    "semaine": 6,
+                    "primes": true
+                },
+                {
+                    "login": "pvt_rgz_cmessinou.ftth",
+                    "b2c": 20,
+                    "b2b": 3,
+                    "jour": 1,
+                    "semaine": 6,
+                    "primes": true
+                },
+                {
+                    "login": "pvt_rgz_lsenakpon.ftth",
+                    "b2c": 25,
+                    "b2b": 5,
+                    "jour": 2,
+                    "semaine": 8,
+                    "primes": true
+                },
+                {
+                    "login": "pvt_rgz_tletitia.ftth",
+                    "b2c": 20,
+                    "b2b": 0,
+                    "jour": 1,
+                    "semaine": 5,
+                    "primes": true
+                }
+            ]
+        },
+        {
+            "id": "ALPHA",
+            "jour": 5,
+            "semaine": 25,
+            "logins": [
+                {
+                    "login": "pms_rgz_tgloria.ftth",
+                    "b2c": 29,
+                    "b2b": 24,
+                    "jour": 3,
+                    "semaine": 13,
+                    "primes": true
+                },
+                {
+                    "login": "pms_rgz_dconstant.ftth",
+                    "b2c": 25,
+                    "b2b": 4,
+                    "jour": 1,
+                    "semaine": 7,
+                    "primes": true
+                },
+                {
+                    "login": "pvt_rgz_bboris.ftth",
+                    "b2c": 16,
+                    "b2b": 2,
+                    "jour": 1,
+                    "semaine": 5,
+                    "primes": true
+                }
+            ]
+        },
+        {
+            "id": "TANGO",
+            "jour": 11,
+            "semaine": 53,
+            "logins": [
+                {
+                    "login": "pvt_rgz_dthibaut.ftth",
+                    "b2c": 62,
+                    "b2b": 0,
+                    "jour": 3,
+                    "semaine": 16,
+                    "primes": true
+                },
+                {
+                    "login": "pms_rgz_hfrancine.ftth",
+                    "b2c": 48,
+                    "b2b": 2,
+                    "jour": 3,
+                    "semaine": 13,
+                    "primes": true
+                },
+                {
+                    "login": "pvt_rgz_wdiane.ftth",
+                    "b2c": 46,
+                    "b2b": 5,
+                    "jour": 3,
+                    "semaine": 13,
+                    "primes": true
+                },
+                {
+                    "login": "pvt_rgz_gsahoui.ftth",
+                    "b2c": 44,
+                    "b2b": 3,
+                    "jour": 2,
+                    "semaine": 12,
+                    "primes": true
+                }
+            ]
+        },
+        {
+            "id": "ZULU",
+            "jour": 6,
+            "semaine": 30,
+            "logins": [
+                {
+                    "login": "pvt-rgz-olouis.ftth",
+                    "b2c": 50,
+                    "b2b": 10,
+                    "jour": 3,
+                    "semaine": 15,
+                    "primes": true
+                },
+                {
+                    "login": "pvt_rgz_ahugues.ftth",
+                    "b2c": 50,
+                    "b2b": 10,
+                    "jour": 3,
+                    "semaine": 15,
+                    "primes": true
+                },
+                {
+                    "login": "pvt_rgz_adidier.ftth",
+                    "b2c": 0,
+                    "b2b": 0,
+                    "jour": 0,
+                    "semaine": 0,
+                    "primes": false
+                }
+            ]
+        },
+        {
+            "id": "CHARLIE",
+            "jour": 4,
+            "semaine": 20,
+            "logins": [
+                {
+                    "login": "pms_rgz_wmarius.ftth",
+                    "b2c": 40,
+                    "b2b": 5,
+                    "jour": 2,
+                    "semaine": 11,
+                    "primes": true
+                },
+                {
+                    "login": "pvt_rgz_tsylvia.ftth",
+                    "b2c": 30,
+                    "b2b": 5,
+                    "jour": 2,
+                    "semaine": 9,
+                    "primes": true
+                }
+            ]
+        },
+        {
+            "id": "MIKE",
+            "jour": 7,
+            "semaine": 33,
+            "logins": [
+                {
+                    "login": "pvt_rgz_oalain.ftth",
+                    "b2c": 30,
+                    "b2b": 1,
+                    "jour": 2,
+                    "semaine": 8,
+                    "primes": true
+                },
+                {
+                    "login": "pvt_rgz_sulrich.ftth",
+                    "b2c": 40,
+                    "b2b": 5,
+                    "jour": 2,
+                    "semaine": 11,
+                    "primes": true
+                },
+                {
+                    "login": "pvt_rgz_hderrick.ftth",
+                    "b2c": 30,
+                    "b2b": 2,
+                    "jour": 2,
+                    "semaine": 8,
+                    "primes": true
+                },
+                {
+                    "login": "pms_rgz_kromeo.ftth",
+                    "b2c": 20,
+                    "b2b": 2,
+                    "jour": 1,
+                    "semaine": 6,
+                    "primes": true
+                }
+            ]
+        },
+        {
+            "id": "ANONYMAT",
+            "jour": 9,
+            "semaine": 35,
+            "logins": [
+                {
+                    "login": "pvt_rgz_gprince.ftth",
+                    "b2c": 30,
+                    "b2b": 5,
+                    "jour": 2,
+                    "semaine": 9,
+                    "primes": true
+                },
+                {
+                    "login": "pvt_rgz_akoffi.ftth",
+                    "b2c": 30,
+                    "b2b": 5,
+                    "jour": 2,
+                    "semaine": 9,
+                    "primes": true
+                },
+                {
+                    "login": "pvt_rgz_agado.ftth",
+                    "b2c": 30,
+                    "b2b": 5,
+                    "jour": 3,
+                    "semaine": 9,
+                    "primes": true
+                },
+                {
+                    "login": "pvt_rgz_lcedric.ftth",
+                    "b2c": 30,
+                    "b2b": 5,
+                    "jour": 2,
+                    "semaine": 9,
+                    "primes": true
+                }
+            ]
+        },
+        {
+            "id": "CONCORDE",
+            "jour": 8,
+            "semaine": 42,
+            "logins": [
+                {
+                    "login": "pvt_rgz_kbernadin.ftth",
+                    "b2c": 39,
+                    "b2b": 1,
+                    "jour": 2,
+                    "semaine": 10,
+                    "primes": true
+                },
+                {
+                    "login": "pms_rgz_cmerveille.ftth",
+                    "b2c": 30,
+                    "b2b": 1,
+                    "jour": 2,
+                    "semaine": 8,
+                    "primes": true
+                },
+                {
+                    "login": "pvt_rgz_kadebayo.ftth",
+                    "b2c": 28,
+                    "b2b": 1,
+                    "jour": 1,
+                    "semaine": 7,
+                    "primes": true
+                },
+                {
+                    "login": "pms_rgz_abijou.ftth",
+                    "b2c": 25,
+                    "b2b": 1,
+                    "jour": 1,
+                    "semaine": 7,
+                    "primes": true
+                },
+                {
+                    "login": "pms_rgz_svictor.ftth",
+                    "b2c": 35,
+                    "b2b": 6,
+                    "jour": 2,
+                    "semaine": 10,
+                    "primes": true
+                }
+            ]
+        },
+        {
+            "id": "BRAVO",
+            "jour": 5,
+            "semaine": 25,
+            "logins": [
+                {
+                    "login": "pvt_rgz_afaoziath.ftth",
+                    "b2c": 30,
+                    "b2b": 20,
+                    "jour": 3,
+                    "semaine": 13,
+                    "primes": true
+                },
+                {
+                    "login": "pvt_rgz_lgrace.ftth",
+                    "b2c": 30,
+                    "b2b": 20,
+                    "jour": 3,
+                    "semaine": 13,
+                    "primes": true
+                }
+            ]
+        },
+        {
+            "id": "OMEGA",
+            "jour": 8,
+            "semaine": 31,
+            "logins": [
+                {
+                    "login": "pvt_rgz_mvenceslas.ftth",
+                    "b2c": 20,
+                    "b2b": 10,
+                    "jour": 2,
+                    "semaine": 8,
+                    "primes": true
+                },
+                {
+                    "login": "pvt_rgz_dalexis.ftth",
+                    "b2c": 15,
+                    "b2b": 0,
+                    "jour": 1,
+                    "semaine": 4,
+                    "primes": true
+                },
+                {
+                    "login": "pvt_rgz_eulisse.ftth",
+                    "b2c": 10,
+                    "b2b": 0,
+                    "jour": 1,
+                    "semaine": 3,
+                    "primes": true
+                },
+                {
+                    "login": "pvt_rgz_amarcel.ftth",
+                    "b2c": 20,
+                    "b2b": 20,
+                    "jour": 2,
+                    "semaine": 10,
+                    "primes": true
+                },
+                {
+                    "login": "pvt_rgz_ojeovani.ftth",
+                    "b2c": 20,
+                    "b2b": 10,
+                    "jour": 2,
+                    "semaine": 8,
+                    "primes": true
+                }
+            ]
+        }
+    ]
+}

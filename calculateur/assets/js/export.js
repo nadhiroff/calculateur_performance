@@ -58,7 +58,9 @@
       else if (Number.isInteger(c.v)) c.z = '#,##0';
     }
     formulesTotaux(ws, def.aoa);
-    CT.styleEntete(ws); CT.styleTotaux(ws); // en-têtes en gras sur fond gris, lignes TOTAL en gras
+    CT.styleEntete(ws); CT.styleTotaux(ws); // en-têtes en gras sur fond gris, lignes TOTAL en gras sur fond gris
+    // Sous-en-têtes à l'intérieur d'une feuille (def.entetes = numéros de lignes) : même style que la 1re ligne
+    (def.entetes || []).forEach((R) => { for (let C = 0; C <= range.e.c; C++) { const a = XLSX.utils.encode_cell({ r: R, c: C }); if (!ws[a]) ws[a] = { t: 's', v: '' }; ws[a].s = ws[XLSX.utils.encode_cell({ r: 0, c: Math.min(C, (def.aoa[0] || []).length - 1) })].s || ws[a].s; } });
     // Le filtre automatique s'arrête au-dessus de la ligne TOTAL : un tri ne la déplace jamais au milieu des données
     if (def.aoa.length > 1 && def.filtre !== false) ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: range.e.r - (ajoute ? 1 : 0), c: range.e.c } }) };
     return ws;
@@ -82,7 +84,9 @@
     feuillesGlobales() {
       const e = CT.etat;
       // Toutes les feuilles de chaque vue : rien n'est laissé de côté
-      return [CT.export.donneesBrutes()].concat(CT.dashboard.feuilles(), CT.pointJour.feuilles(), CT.perf.feuilles(), [{ nom: 'Objectifs', cols: [14, 32, 10, 10, 10, 10, 12, 8, 10], aoa: CT.objectifs.versExcel(e.motiv.objectifs) }]);
+      const plus = (f) => { try { return f() || []; } catch (er) { return []; } };   // pages ajoutées : RGZ (indicateurs, évolution), factures, comparaisons
+      return [CT.export.donneesBrutes()].concat(CT.dashboard.feuilles(), CT.pointJour.feuilles(), CT.perf.feuilles(), [{ nom: 'Objectifs', cols: [14, 32, 10, 10, 10, 10, 12, 8, 10], aoa: CT.objectifs.versExcel(e.motiv.objectifs) }],
+        plus(() => CT.analyseUI.feuillesRgz()), plus(() => CT.factUI.feuillesGlobales()), plus(() => CT.analyseUI.feuillesGlobales()));
     },
   };
 })();

@@ -1,0 +1,27 @@
+Demande du DG pour amelioration de la plateforme
+ Le boss demande que tu complete dans le menu du volet tableau de bord interne ceci :
+
+* Challenge  (A)
+       - Challenge login
+       - Challenge Equipe 
+
+*Facturation ( Pour celtiis en utilisant le fichier que Mr Willian envoie chaque fin du mois) (B)
+     - B2B
+     - B2C
+
+* Point financier par Login pour chaque commerciaux ( en utilisant le fichier de Mr William tout en considérant uniquement les ventes payees ) (C)
+
+* Cumul de tous les reports en utilisant les  fichiers de Mr William (D)
+
+Tableau  pouvant permettre de faire des  comparaison weekly et monthly
+
+A-  il s'agit de ramener les volets challenge  par login et équipe dans le menu
+B- Pour la facturation, il faut utiliser un fichier  Point FTTH et FTTO qui seront joint 
+Le fichier de facturation inclut les commissions de ventes one short par debit, le prime de performance  par login, les primes du partenaire  et les primes d'atteinte de l'objectifs 
+ (Le fichier de chaque segment seront joint avec les méthodes de calcule)
+
+C- Faire le point des ventes par login ( Commission par debit par login ( 80% du one short  relatif)  en plus de leur prime de performance  a l'exception  de celui de Anonymat que perçoit 100% de ses  commissions en plus des primes de performances
+
+D- Pour les reports un prototype existant te sera montrer dans un fichier au préalable
+
+

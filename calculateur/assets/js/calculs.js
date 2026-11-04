@@ -259,7 +259,10 @@
        la projection prolonge le rythme de la période (ventes ÷ jours ouvrés de la période) sur les jours ouvrés du mois. */
     perfPartenaires(lignes, { cle, jourRef, prioritaire = 'RGZ', cfg, du = null }) {
       const P = CT.store.actifs(cle), obj = P.objectifs, R = P.regles;
-      const histo = (cfg.historique && cfg.historique.partenaires) || {};
+      // Historique de l'ANNÉE du mois affiché (année en cours ou précédente, fournies par le serveur) ; janvier → décembre de l'an passé
+      const H = cfg.historique || {}, Hp = H.precedente || {}, an = +cle.slice(0, 4);
+      const histo = (an === +H.annee ? H.partenaires : an === +Hp.annee ? Hp.partenaires : null) || {};
+      const histoAvant = (an === +H.annee ? Hp.partenaires : null) || {};
       const debut = du && du > cle + '-01' ? du : cle + '-01';
       const jours = CT.date.joursDuMois(cle).filter((j) => j >= debut && j <= jourRef);
       const ouvresEcoules = jours.filter((j) => CT.objectifs.estOuvre(obj, j)).length, nbOuvres = CT.objectifs.nbJoursOuvres(obj);
@@ -273,9 +276,9 @@
         else if (l.statut === 'VALIDE') g.attente++;
       }
       histo && Object.keys(histo).forEach((n) => { if (!m.has(n)) m.set(n, { partenaire: n, ventes: 0, b2c: 0, b2b: 0, attente: 0, ca: 0, logins: new Set() }); });
-      const mi = +cle.slice(5, 7) - 1; // index du mois courant (0 = janvier) ; l'historique couvre Jan→Sep
+      const mi = +cle.slice(5, 7) - 1; // index du mois courant (0 = janvier)
       const rows = [...m.values()].map((g) => {
-        const h = histo[g.partenaire] || []; const prec = mi >= 1 && h[mi - 1] != null ? h[mi - 1] : 0;
+        const h = histo[g.partenaire] || []; const prec = mi >= 1 ? (h[mi - 1] != null ? h[mi - 1] : 0) : ((histoAvant[g.partenaire] || [])[11] || 0);
         const projection = ouvresEcoules > 0 ? (g.ventes / ouvresEcoules) * nbOuvres : null;
         return { partenaire: g.partenaire, prioritaire: g.partenaire === prioritaire, ventes: g.ventes, b2c: g.b2c, b2b: g.b2b, attente: g.attente, ca: g.ca, nbLogins: g.logins.size,
           commission: g.b2c * comm.b2c + g.b2b * comm.b2b, histo: h, precedent: prec, projection: projection == null ? 0 : projection, nouveau: !(prec > 0) && g.ventes > 0,

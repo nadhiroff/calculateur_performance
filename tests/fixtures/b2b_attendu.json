@@ -1,0 +1,126 @@
+{
+ "logins": {
+  "pms_rgz_tosee": {
+   "vente": 16,
+   "commVTB": 166400,
+   "reports": 0,
+   "primeVTB": 75000,
+   "totalVTB": 241400,
+   "commPVT": 41600
+  },
+  "pms_rgz_tgloria": {
+   "vente": 20,
+   "commVTB": 220800,
+   "reports": 0,
+   "primeVTB": 75000,
+   "totalVTB": 295800,
+   "commPVT": 55200
+  },
+  "pvt_rgz_gkohla": {
+   "vente": 6,
+   "commVTB": 57600,
+   "reports": 0,
+   "primeVTB": 25000,
+   "totalVTB": 82600,
+   "commPVT": 14400
+  },
+  "pms_rgz_kromeo": {
+   "vente": 5,
+   "commVTB": 52000,
+   "reports": 0,
+   "primeVTB": 25000,
+   "totalVTB": 77000,
+   "commPVT": 13000
+  },
+  "pvt_rgz_mfrancois": {
+   "vente": 5,
+   "commVTB": 52000,
+   "reports": 0,
+   "primeVTB": 25000,
+   "totalVTB": 77000,
+   "commPVT": 13000
+  },
+  "pvt-rgz-olouis": {
+   "vente": 16,
+   "commVTB": 153600,
+   "reports": 0,
+   "primeVTB": 75000,
+   "totalVTB": 228600,
+   "commPVT": 38400
+  },
+  "pvt_rgz_fadji": {
+   "vente": 1,
+   "commVTB": 9600,
+   "reports": 0,
+   "primeVTB": 0,
+   "totalVTB": 9600,
+   "commPVT": 2400
+  },
+  "pvt_rgz_kbernadin": {
+   "vente": 4,
+   "commVTB": 42400,
+   "reports": 0,
+   "primeVTB": 0,
+   "totalVTB": 42400,
+   "commPVT": 10600
+  },
+  "pms_rgz_hfrancine": {
+   "vente": 5,
+   "commVTB": 52000,
+   "reports": 0,
+   "primeVTB": 25000,
+   "totalVTB": 77000,
+   "commPVT": 13000
+  },
+  "pvt_rgz_aconstant": {
+   "vente": 1,
+   "commVTB": 9600,
+   "reports": 0,
+   "primeVTB": 0,
+   "totalVTB": 9600,
+   "commPVT": 2400
+  },
+  "pvt_rgz_cmessinou": {
+   "vente": 1,
+   "commVTB": 9600,
+   "reports": 0,
+   "primeVTB": 0,
+   "totalVTB": 9600,
+   "commPVT": 2400
+  },
+  "pvt_rgz_kadebayo": {
+   "vente": 2,
+   "commVTB": 23200,
+   "reports": 0,
+   "primeVTB": 0,
+   "totalVTB": 23200,
+   "commPVT": 5800
+  },
+  "pvt_rgz_dcharmelie": {
+   "vente": 1,
+   "commVTB": 9600,
+   "reports": 0,
+   "primeVTB": 0,
+   "totalVTB": 9600,
+   "commPVT": 2400
+  },
+  "pms_rgz_wmarius": {
+   "vente": 1,
+   "commVTB": 24000,
+   "reports": 1,
+   "primeVTB": 0,
+   "totalVTB": 24000,
+   "commPVT": 6000
+  }
+ },
+ "recap": {
+  "pay": 84,
+  "reportPay": 1,
+  "commVTB": 882400,
+  "primeVTB": 325000,
+  "commPVT": 220600,
+  "primePVT": 105000,
+  "totalHT": 1533000,
+  "ttc": 1808940
+ }
+}

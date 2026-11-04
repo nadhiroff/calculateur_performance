@@ -52,7 +52,7 @@
   /* Comparatif de tous les partenaires (replié par défaut dans « Autres partenaires ») */
   function rendreComparatif(zone, ctx) {
     const { e, p, debutP, partielle, pr } = ctx;
-    zone.innerHTML = `<section><h4>Classement des partenaires</h4><p class="mini-cap">Ventes OK du ${CT.date.court(debutP)} au ${CT.date.court(e.jourRef)} · projection = rythme actuel sur ${p.nbOuvres} jours ouvrés · évolution vs ${p.labelsHisto[p.moisIndex - 1] || 'mois précédent'}</p><div id="pf-rank"></div></section>
+    zone.innerHTML = `<section><h4>Classement des partenaires</h4><p class="mini-cap">Ventes OK du ${CT.date.court(debutP)} au ${CT.date.court(e.jourRef)} · projection = rythme actuel sur ${p.nbOuvres} jours ouvrés · évolution vs ${(p.moisIndex > 0 ? p.labelsHisto[p.moisIndex - 1] : p.labelsHisto[11]) || 'mois précédent'}</p><div id="pf-rank"></div></section>
       <section><h4>Part de marché — top 10</h4><div class="chart-box tall"><canvas id="pf-ch-part" role="img" aria-label="Part de marché des partenaires"></canvas></div></section>
       <section><h4>Historique mensuel par partenaire</h4><div id="pf-histo"></div></section>
       <section><h4>Meilleurs vendeurs — tous partenaires</h4><div class="grid-3" id="pf-logins"></div></section>`;
@@ -61,7 +61,7 @@
     zone.querySelector('#pf-rank').append(CT.table.creer({ pageSize: 0, caption: 'Classement des partenaires', lignes: p.rows, classeLigne: (r) => (r.prioritaire ? 'row-rgz' : ''),
       colonnes: [{ cle: 'rang', titre: 'Rang', num: true }, { cle: 'partenaire', titre: 'Partenaire' }, { cle: 'ventes', titre: 'Ventes OK', num: true, fmt: CT.fmt.int }, { cle: 'b2c', titre: 'B2C', num: true, fmt: CT.fmt.int }, { cle: 'b2b', titre: 'B2B', num: true, fmt: CT.fmt.int },
         { cle: 'attente', titre: 'En attente', num: true, fmt: CT.fmt.int }, { cle: 'ca', titre: 'CA (FCFA)', num: true, fmt: CT.fmt.mnt }, { cle: 'part', titre: 'Part de marché', num: true, fmt: (v) => CT.fmt.pct(v, 1) },
-        { cle: 'precedent', titre: p.labelsHisto[p.moisIndex - 1] || 'Mois préc.', num: true, fmt: CT.fmt.int }, { cle: 'projection', titre: 'Projection fin de mois', num: true, fmt: CT.fmt.int },
+        { cle: 'precedent', titre: (p.moisIndex > 0 ? p.labelsHisto[p.moisIndex - 1] : p.labelsHisto[11]) || 'Mois préc.', num: true, fmt: CT.fmt.int }, { cle: 'projection', titre: 'Projection fin de mois', num: true, fmt: CT.fmt.int },
         { cle: 'ecartPrec', titre: 'Écart vs préc.', num: true, fmt: signe }, { cle: 'evolution', titre: 'Évolution', num: true, html: true, fmt: (v, r) => (r.nouveau ? '<span class="badge badge-info">Nouveau</span>' : evo(v == null ? 0 : v)) },
         { cle: 'commission', titre: 'Commission estimée (FCFA)', num: true, fmt: CT.fmt.mnt }],
       pied: { rang: '', partenaire: 'TOTAL', ventes: p.total.ventes, b2c: p.total.b2c, b2b: p.total.b2b, attente: p.total.attente, ca: p.total.ca, part: 1, precedent: p.total.precedent, projection: p.total.projection, ecartPrec: p.total.ecartPrec, evolution: p.total.evolution, commission: p.total.commission } }).el);
@@ -220,21 +220,20 @@
               { cle: 'primeFinMois', titre: 'Prime fin de mois (FCFA)', num: true, fmt: CT.fmt.mnt }, { cle: 'primesJournees', titre: 'Primes journées (FCFA)', num: true, fmt: CT.fmt.mnt }, { cle: 'trophee', titre: 'Trophée (FCFA)', num: true, fmt: CT.fmt.mnt },
               { cle: 'totalSup', titre: 'Total superviseur (FCFA)', num: true, fmt: CT.fmt.mnt }, { cle: 'marge', titre: 'Marge ' + pr + ' (FCFA)', num: true, fmt: CT.fmt.mnt }] }).el);
           zone.querySelector('#pf-top').append(CT.table.creer({ pageSize: 0, caption: 'Top 10 agents', lignes: m.classement,
-            colonnes: [{ cle: 'rang', titre: '#', num: true }, { cle: 'login', titre: 'Login', fmt: (v) => CT.loginCourt(v) }, { cle: 'equipe', titre: 'Équipe' }, { cle: 'real', titre: 'Réalisé', num: true }, { cle: 'tro', titre: 'TRO', num: true, fmt: (v) => CT.fmt.pct(v, 0) }, { cle: 'palier', titre: 'Palier' }] }).el);
+            colonnes: [{ cle: 'rang', titre: 'N°', num: true }, { cle: 'login', titre: 'Login', fmt: (v) => CT.loginCourt(v) }, { cle: 'equipe', titre: 'Équipe' }, { cle: 'real', titre: 'Réalisé', num: true }, { cle: 'tro', titre: 'TRO', num: true, fmt: (v) => CT.fmt.pct(v, 0) }, { cle: 'palier', titre: 'Palier' }] }).el);
         },
         autres(zone) {
           let choix = (() => { try { return sessionStorage.getItem('ct_partenaire_vu'); } catch (_) { return null; } })();
           if (!autres.some((r) => r.partenaire === choix)) choix = autres.length ? autres[0].partenaire : '';
-          zone.innerHTML = `<div class="stack">${CT.ui.enClair(`Choisissez un partenaire pour voir <b>ses</b> performances, séparément de ${CT.esc(pr)}. Le comparatif de tous les partenaires est en bas de page.`, 'fa-handshake')}
+          zone.innerHTML = `<div class="stack">${CT.ui.enClair(`Choisissez un partenaire pour voir <b>ses</b> performances, séparément de ${CT.esc(pr)}. Le comparatif de tous les partenaires est juste en dessous.`, 'fa-handshake')}
             <div class="field choix-partenaire"><label for="pf-partenaire">Partenaire</label><select class="select" id="pf-partenaire">${autres.map((r) => `<option value="${CT.esc(r.partenaire)}"${r.partenaire === choix ? ' selected' : ''}>${CT.esc(r.partenaire)} — ${mn(r.ventes)} ventes</option>`).join('')}</select></div>
             <div id="pf-partenaire-vue" class="stack"></div>
-            <details class="card comparatif"><summary><i class="fa-solid fa-table-list" aria-hidden="true"></i> Comparatif de tous les partenaires (classement, part de marché, historique, meilleurs vendeurs)</summary><div class="stack" id="pf-comparatif"></div></details></div>`;
+            <section class="card comparatif" aria-labelledby="pf-comparatif-titre"><h3 id="pf-comparatif-titre"><i class="fa-solid fa-table-list" aria-hidden="true"></i> Comparatif de tous les partenaires (classement, part de marché, historique, meilleurs vendeurs)</h3><div class="stack" id="pf-comparatif"></div></section></div>`;
           const sel = zone.querySelector('#pf-partenaire'), vue = zone.querySelector('#pf-partenaire-vue');
           const montrer = () => { try { sessionStorage.setItem('ct_partenaire_vu', sel.value); } catch (_) { /* stockage indisponible */ } rendrePartenaire(vue, ctx, sel.value); };
           sel.addEventListener('change', montrer);
           if (choix) montrer(); else vue.innerHTML = '<p class="muted">Aucun autre partenaire sur la période.</p>';
-          const det = zone.querySelector('details.comparatif');
-          det.addEventListener('toggle', () => { if (det.open && !det.dataset.rendu) { det.dataset.rendu = '1'; rendreComparatif(zone.querySelector('#pf-comparatif'), ctx); } });
+          rendreComparatif(zone.querySelector('#pf-comparatif'), ctx);   // toujours affiché (plus de bloc replié)
         },
       };
       const onglets = CT.ui.onglets({ cle: 'perf', rendu: (id, zone) => RUBRIQUES[id](zone), onglets: [
@@ -242,7 +241,7 @@
         { id: 'b2b', icone: 'fa-building', titre: 'Ventes B2B', aide: mn(rg.b2b) + ' entreprises' },
         { id: 'b2c', icone: 'fa-house-user', titre: 'Ventes B2C', aide: mn(rg.b2c) + ' particuliers' },
         { id: 'commissions', icone: 'fa-sack-dollar', titre: 'Commissions & primes', aide: 'Qui gagne combien' },
-        { id: 'objectifs', icone: 'fa-bullseye', titre: 'Objectifs', aide: m.equipes.filter((x) => x.tro >= 1).length + ' / ' + m.equipes.length + ' équipes' },
+        { id: 'objectifs', icone: 'fa-flag-checkered', titre: 'Atteinte des objectifs', aide: m.equipes.filter((x) => x.tro >= 1).length + ' / ' + m.equipes.length + ' équipes' },
         { id: 'autres', icone: 'fa-handshake', titre: 'Autres partenaires', aide: autres.length + ' partenaires' }] });
       root.replaceChildren(onglets);
       onglets.premier();

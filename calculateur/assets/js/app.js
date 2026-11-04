@@ -6,10 +6,19 @@
   'use strict';
   const CT = window.CT;
   const { h, $, $$ } = CT;
-  const etat = (CT.etat = { res: null, toutes: [], lignes: [], meta: null, qualite: null, jourRef: null, cle: null, vue: 'dashboard', prioritaire: 'RGZ', motiv: null, motivPJ: null, motivPerf: null, perf: null, filtre: null, kpiFiltre: null, jourDu: null, periodeDu: null, noteDates: '' });
+  const etat = (CT.etat = { gran: (() => { try { return sessionStorage.getItem('ct_vue') || 'jour'; } catch (e) { return 'jour'; } })(), res: null, toutes: [], lignes: [], meta: null, qualite: null, jourRef: null, cle: null, vue: 'dashboard', prioritaire: 'RGZ', motiv: null, motivPJ: null, motivPerf: null, perf: null, filtre: null, kpiFiltre: null, jourDu: null, periodeDu: null, noteDates: '' });
   let fichierChoisi = null, analyseEnCours = false, appliquerDates = async () => {};
   const VUES = { dashboard: { id: 'view-dashboard', titre: 'Tableau de bord' }, rgz: { id: 'view-rgz', titre: 'Tableau de bord RGZ' }, pointjour: { id: 'view-pointjour', titre: 'Point du jour' }, perf: { id: 'view-perf', titre: 'Performance partenaires' } };
   const HASH = { '#dashboard': 'dashboard', '#rgz': 'rgz', '#point-du-jour': 'pointjour', '#performance': 'perf' };
+  // Pages « Challenge » et « Facturation Celtiis » (facturation.js)
+  Object.entries({ challogin: ['view-challogin', 'Challenge login', '#challenge-login'], chalequipe: ['view-chalequipe', 'Challenge équipe', '#challenge-equipe'], factb2c: ['view-factb2c', 'Facturation B2C', '#facturation-b2c'],
+    factb2b: ['view-factb2b', 'Facturation B2B', '#facturation-b2b'], finance: ['view-finance', 'Point financier par login', '#point-financier'], reports: ['view-reports', 'Reports', '#reports'],
+    // Facturation : tableau de bord, évolution, performance agents, recommandations (facturation.js) ; Analyse (analyse.js)
+    factdash: ['view-factdash', 'Tableau de bord des factures', '#facturation'], factevo: ['view-factevo', 'Évolution de la facturation', '#facturation-evolution'],
+    factperf: ['view-factperf', 'Performance agents', '#facturation-performance'], factreco: ['view-factreco', 'Recommandations', '#facturation-recommandations'],
+    comparaisons: ['view-comparaisons', 'Comparaisons', '#comparaisons'], previsions: ['view-previsions', 'Prévisions', '#previsions'],
+    parametres: ['view-parametres', 'Paramètres', '#parametres'] })   // Paramètres : page de l'application (parametres.js), sans rechargement
+    .forEach(([k, [id, titre, h]]) => { VUES[k] = { id, titre }; HASH[h] = k; });
 
   /* ---------- Thème (auto / clair / sombre) ---------- */
   const THEMES = ['auto', 'light', 'dark'], LIB = { auto: 'Automatique', light: 'Clair', dark: 'Sombre' }, ICO = { auto: 'fa-circle-half-stroke', light: 'fa-sun', dark: 'fa-moon' };
@@ -33,6 +42,81 @@
     document.title = VUES[nom].titre + ' — POWERGZ';
     const ctx = $('#share-ctx'); if (ctx) ctx.textContent = VUES[nom].titre;
     window.scrollTo({ top: 0 });
+    if (CT.factUI) CT.factUI.surVue();
+    if (CT.analyseUI) CT.analyseUI.surVue();
+    majBarrePeriode();
+    // Paramètres : ni export, ni dates (elles ne s'y appliquent pas)
+    if (nom === 'parametres') ['#sharebar', '#global-date-filters', '#filter-status'].forEach((s) => { const el = $(s); if (el) el.hidden = true; });
+    // Paramètres modifiés pendant la visite de la page Paramètres : recalcul une seule fois, en la quittant
+    if (nom !== 'parametres' && etat.recalculAttente && etat.res) { etat.recalculAttente = false; classerEtCalculer(); rendreTout(); CT.toast('Paramètres appliqués : rapports recalculés.', 'info', 3500); }
+  }
+
+  /* Barre « Période / Vue » de l'en-tête : « Tout (3 mois) » + les 3 derniers mois présents en base (mis à jour à chaque import) ;
+     le bouton actif est celui de la période appliquée. « Vue » (jour / semaine / mois) : graphiques chronologiques. */
+  const VUES_AVEC_GRAPHIQUES = ['dashboard', 'rgz'];
+  function majBarrePeriode() {
+    const b = $('#periode-barre'), zone = $('#pb-periodes'), m = etat.moisDispo || [];
+    if (!b || !zone) return;
+    b.hidden = !etat.lignes.length || !m.length || etat.vue === 'parametres'; if (b.hidden) return;
+    const trois = m.slice(-3), annees = new Set(trois.map((x) => x.mois.slice(0, 4))).size > 1;
+    // Libellés courts (« Oct. », « Déc. 26 ») ; le nom complet en infobulle
+    const COURT = ['Janv.', 'Févr.', 'Mars', 'Avr.', 'Mai', 'Juin', 'Juil.', 'Août', 'Sept.', 'Oct.', 'Nov.', 'Déc.'];
+    const lib = (x) => COURT[+x.mois.slice(5, 7) - 1] + (annees ? ' ' + x.mois.slice(2, 4) : '');
+    const btns = (trois.length > 1 ? [[trois[0].mois + '-01|' + trois[trois.length - 1].au, trois.length + ' mois', 'Les ' + trois.length + ' derniers mois en base : ' + trois.map((x) => CT.date.libelleMois(x.mois)).join(', ')]] : [])
+      .concat(trois.map((x) => [x.mois + '-01|' + x.au, lib(x), CT.date.libelleMois(x.mois) + ' (du 01 au ' + CT.date.court(x.au).slice(0, 5) + ')']));
+    const d = $('#global-date-debut'), cur = ((d && d.value) || (etat.cle ? etat.cle + '-01' : '')) + '|' + (etat.jourRef || '');
+    zone.innerHTML = btns.map(([v, t, ti]) => '<button type="button" class="pb-btn" data-periode="' + v + '" title="' + CT.esc(ti) + '" aria-pressed="' + (v === cur) + '">' + CT.esc(t) + '</button>').join('');
+    const vg = $('#pb-vue'); if (vg) vg.hidden = !VUES_AVEC_GRAPHIQUES.includes(etat.vue);
+    $$('[data-vue-gran]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.vueGran === etat.gran)));
+  }
+  function remplirPeriodeRapide() {
+    majBarrePeriode();
+    const sel = $('#periode-rapide'), m = etat.moisDispo || []; if (!sel || !m.length) return;
+    const opt = (v, t) => '<option value="' + v + '">' + CT.esc(t) + '</option>', der = m[m.length - 1], trois = m.slice(-3);
+    let html = opt('', m.length > 1 ? 'Autre période…' : '1 seul mois') + opt(der.du + '|' + der.au, 'Dernier mois en base (' + CT.date.libelleMois(der.mois) + ')');
+    if (m.length > 1) html += opt(trois[0].mois + '-01|' + der.au, (trois.length < 3 ? trois.length : 3) + ' derniers mois');
+    [...new Set(m.map((x) => x.mois.slice(0, 4)))].sort().reverse().forEach((an) => {
+      const ms = m.filter((x) => x.mois.slice(0, 4) === an);
+      html += '<optgroup label="' + an + '">' + opt(an + '-' + ms[0].mois.slice(5) + '-01|' + ms[ms.length - 1].au, 'Année ' + an + ' (' + ms.length + ' mois)')
+        + ms.slice().reverse().map((x) => opt(x.mois + '-01|' + x.au, CT.date.libelleMois(x.mois))).join('') + '</optgroup>';
+    });
+    if (sel.dataset.html !== html) { sel.innerHTML = html; sel.dataset.html = html; }
+    // Le choix reste visible : période appliquée (début → fin) ; sinon « Période personnalisée »
+    const d = $('#global-date-debut'), du = (d && d.value) || (etat.cle ? etat.cle + '-01' : ''), cur = du + '|' + (etat.jourRef || '');
+    const perso = sel.querySelector('option[data-perso]'); if (perso) perso.remove();
+    // Un seul mois en base : rien d'autre à choisir, on le dit clairement
+    sel.disabled = m.length < 2; sel.title = m.length < 2 ? 'Un seul mois en base (' + CT.date.libelleMois(der.mois) + ') : les autres périodes apparaîtront après l\'import d\'autres mois' : 'Autre mois ou année présents en base';
+    if ($$('#pb-periodes [aria-pressed="true"]').length || m.length < 2) sel.value = '';   // période déjà indiquée par un bouton
+    else if ([...sel.options].some((o) => o.value === cur)) sel.value = cur;
+    else if (etat.jourRef) { const o = document.createElement('option'); o.value = cur; o.dataset.perso = '1'; o.textContent = 'Période personnalisée (' + CT.date.court(du) + ' → ' + CT.date.court(etat.jourRef) + ')'; sel.insertBefore(o, sel.options[1] || null); sel.value = cur; }
+    if (sel.selectedIndex < 0) sel.selectedIndex = 0;   // jamais de liste vide
+  }
+
+  /* ---------- Sous-menus du sidebar : #point-du-jour/<rubrique>, #performance/<rubrique> ----------
+     La rubrique est celle des onglets de la page (CT.ui.onglets, clé 'pointjour' ou 'perf') : mémorisée puis ouverte. */
+  const SOUS_HASH = { pointjour: '#point-du-jour', perf: '#performance' };
+  function surbrillanceSous() {
+    const [h, sous] = location.hash.split('/'), nom = HASH[h] || (location.hash ? null : 'dashboard'), premier = nom && $('#nav details[data-groupe="' + nom + '"] a[data-sous]');
+    const ong = sous || (nom && SOUS_HASH[nom] && (() => { try { return sessionStorage.getItem('ct_onglet_' + nom); } catch (e) { return null; } })()) || (premier ? premier.dataset.sous.split('/')[1] : null);
+    $$('#nav a[data-sous]').forEach((a) => { if (nom && ong && a.dataset.sous === nom + '/' + ong) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+    $$('#nav details[data-groupe]').forEach((d) => { if (d.dataset.groupe === nom) d.open = true; });
+    // Fil d'Ariane et titre de l'onglet : page › rubrique ouverte
+    const actif = $('#nav a[data-sous][aria-current="page"]'), ctx = $('#share-ctx');
+    if (nom && VUES[nom]) {
+      // Fil d'Ariane : le nom de la page seulement (longueur constante, la barre des dates reste alignée) ; la rubrique est le grand titre
+      const t = VUES[nom].titre + (actif ? ' › ' + actif.textContent.trim() : ''); if (ctx) ctx.textContent = VUES[nom].titre; document.title = t + ' — POWERGZ';
+      const v = document.getElementById(VUES[nom].id), h1 = v && v.querySelector('.page-title h1'), sur = v && v.querySelector('.page-title .eyebrow');
+      if (h1) { if (!h1.dataset.titre) { h1.dataset.titre = h1.textContent; if (sur) sur.dataset.titre = sur.textContent; } const rub = actif && actif.closest('details[data-groupe]') ? actif.textContent.trim() : null;
+        h1.textContent = rub || h1.dataset.titre; if (sur) sur.textContent = rub ? actif.closest('details').querySelector('summary').textContent.trim() : sur.dataset.titre; }
+    }
+  }
+  function routeHash() {
+    const [h, sous] = location.hash.split('/'), nom = HASH[h] || 'dashboard';
+    if (sous && SOUS_HASH[nom]) { try { sessionStorage.setItem('ct_onglet_' + nom, sous); } catch (e) { /* stockage indisponible */ } }
+    vue(nom);
+    if (sous && SOUS_HASH[nom]) { const b = document.getElementById('tab-' + nom + '-' + sous); if (b && b.getAttribute('aria-selected') !== 'true') b.click(); }
+    else if (sous && CT.analyseUI) CT.analyseUI.allerA(sous === 'apercu' ? 'view-' + nom : 'sec-' + nom + '-' + sous);
+    surbrillanceSous();
   }
 
   /* ---------- Calculs globaux ---------- */
@@ -80,6 +164,9 @@
     etat.prioritaire = cfg.prioritaire || 'RGZ';
     etat.cle = etat.jourRef.slice(0, 7);
     const P = CT.store.actifs(etat.cle);
+    // Mois sans objectifs propres dans Paramètres (ex. premières ventes d'un nouveau mois) : on le signale clairement
+    const de = (m) => (/^[aeiouyh]/i.test(m) ? 'd\'' : 'de ') + m;   // « d'octobre », « de novembre »
+    if (P.herite) etat.noteDates = (etat.noteDates ? etat.noteDates + ' ' : '') + 'Objectifs ' + de(CT.date.libelleMois(etat.cle).toLowerCase()) + ' non saisis dans Paramètres : ceux ' + de(CT.date.libelleMois(P.source).toLowerCase()) + ' sont utilisés (calendrier lundi–vendredi).';
     // Toutes les lignes sont classées ; seules celles des offres comptées entrent dans les calculs (etat.lignes)
     if (!sansClasser) { CT.parser.classer(etat.toutes, P.regles, cfg); etat.lignes = CT.parser.retenues(etat.toutes); }
     const base = { cle: etat.cle, jourRef: etat.jourRef, prioritaire: etat.prioritaire }, du = etat.jourDu, duPerf = etat.periodeDu;
@@ -153,19 +240,39 @@
     perf: () => (etat.periodeDu === etat.jourRef ? CT.date.court(etat.jourRef) : 'du ' + CT.date.court(etat.periodeDu || etat.cle + '-01') + ' au ' + CT.date.court(etat.jourRef)),
     fichier: () => (etat.jourDu ? etat.jourDu + '_au_' + etat.jourRef : etat.jourRef),
     fichierPerf: () => (CT.periode.perfPartielle() ? (etat.periodeDu === etat.jourRef ? etat.jourRef : etat.periodeDu + '_au_' + etat.jourRef) : etat.cle),
-    /* Semaine de la période : du lundi (ou de la date de début si elle est plus tardive) à la date de fin, partenaire prioritaire.
-       Objectif : celui de la semaine (fichier) si tous ses jours ouvrés sont couverts, sinon objectif du jour × jours ouvrés
-       couverts — une semaine commencée n'est pas comparée à l'objectif de la semaine entière. */
-    semaine: () => {
-      const m = etat.motiv, lundi = CT.date.lundiDe(etat.jourRef), du = CT.periode.perfDu() > lundi ? CT.periode.perfDu() : lundi;
-      const comptes = m.regles.statuts_comptes || ['OK'];
-      const ventes = etat.lignes.filter((l) => l.partenaire === etat.prioritaire && comptes.includes(l.statut) && l.jour && l.jour >= du && l.jour <= etat.jourRef).length;
-      const ouvresEntre = (a, b) => CT.date.joursDuMois(etat.cle).filter((j) => j >= a && j <= b && CT.objectifs.estOuvre(m.objectifs, j)).length;
-      const couverts = ouvresEntre(du, etat.jourRef), entiere = du === lundi && couverts > 0 && couverts === ouvresEntre(lundi, CT.date.ajouter(lundi, 6));
-      return { du, ventes, entiere, objectif: entiere ? m.reseau.objSemaine : Math.round(m.reseau.objJour * couverts) };
+    /* Réalisé et objectif de [du → au] pour les blocs Jour, Semaine, Période et Mois. Objectifs = Paramètres › Objectifs (ligne TOTAL) :
+         période = objectif du jour × jours ouvrés de [du → au], chaque mois avec ses propres objectifs ;
+         jour = objectif du jour ; semaine complète = objectif de la semaine ; mois = objectif du mois (voir jour / semaine / mois).
+       f (facultatif) = filtres du tableau de bord : partenaire (vide = partenaire prioritaire ; les autres n'ont pas d'objectif →
+       objectif null) et statut (vide = statuts comptés des règles, « OK » par défaut). Sans filtre : mêmes ventes qu'avant. */
+    bilan: (du, au, f, auObj) => {
+      f = f || {};
+      const part = f.partenaire || etat.prioritaire, statuts = f.statut ? [f.statut] : (etat.motiv.regles.statuts_comptes || ['OK']);
+      const real = etat.lignes.filter((l) => l.partenaire === part && statuts.includes(l.statut) && l.jour && l.jour >= du && l.jour <= au).length;
+      if (part !== etat.prioritaire) return { du, au, real, objectif: null, taux: null };
+      // Comme calculerPlusieursMois : un mois sans aucune vente en base (hors le dernier) ne crée pas de faux retard
+      const tr = CT.calc.tranches(du, auObj || au).filter((t, i, all) => i === all.length - 1 || etat.lignes.some((l) => l.jour && l.jour >= t.du && l.jour <= t.au));
+      const objectif = CT.somme(tr, (t) => CT.objectifs.objectifPeriode(CT.store.actifs(t.cle).objectifs, t.cle, t.du, t.au));
+      return { du, au, real, objectif, taux: objectif > 0 ? real / objectif : null };
     },
-    /* Objectif de la période [début → fin] (objectif du jour × jours ouvrés écoulés de la période) et réalisé du partenaire prioritaire */
-    objectif: () => { const r = etat.motivPerf.reseau; return { real: r.real, objectif: r.objADate, taux: r.objADate > 0 ? r.real / r.objADate : null }; },
+    /* Objectif (jour / semaine / mois) de Paramètres, remplacé dans un bilan ; null reste null (partenaire sans objectif) */
+    avecObjectif: (b, v) => (b.objectif == null ? b : Object.assign(b, { objectif: v, taux: v > 0 ? b.real / v : null })),
+    totauxParam: () => CT.objectifs.totaux(CT.store.actifs(etat.cle).objectifs),
+    /* Journée de référence (date de fin) : objectif du jour de Paramètres */
+    jour: (f) => CT.periode.avecObjectif(CT.periode.bilan(etat.jourRef, etat.jourRef, f), CT.periode.totauxParam().jour),
+    /* Semaine : du lundi (ou de la date de début si elle est plus tardive) à la date de fin.
+       Objectif : celui de la semaine (Paramètres) si tous ses jours ouvrés sont couverts, sinon objectif du jour × jours ouvrés couverts. */
+    semaine: (f) => {
+      const lundi = CT.date.lundiDe(etat.jourRef), du = CT.periode.perfDu() > lundi ? CT.periode.perfDu() : lundi, obj = CT.store.actifs(etat.cle).objectifs;
+      let b = CT.periode.bilan(du, etat.jourRef, f);
+      const couverts = CT.objectifs.ouvresEntre(obj, etat.cle, du, etat.jourRef), entiere = du === lundi && couverts > 0 && couverts === CT.objectifs.ouvresEntre(obj, etat.cle, lundi, CT.date.ajouter(lundi, 6));
+      if (entiere) b = CT.periode.avecObjectif(b, CT.periode.totauxParam().semaine);
+      return { du, ventes: b.real, real: b.real, objectif: b.objectif, taux: b.taux, entiere };
+    },
+    /* Période [début → fin] : objectif du jour × jours ouvrés de la période */
+    objectif: (f) => CT.periode.bilan(CT.periode.perfDu(), etat.jourRef, f),
+    /* Mois de la date de fin : réalisé du 1er à la date de fin, objectif du mois (Paramètres) */
+    mois: (f) => CT.periode.avecObjectif(CT.periode.bilan(etat.cle + '-01', etat.jourRef, f), CT.periode.totauxParam().mois),
   };
 
   function rendreTout() {
@@ -176,6 +283,7 @@
     const sel = $('#pj-format'); if (sel) sel.disabled = !a;
     const globalFilters = $('#global-date-filters');
     if (globalFilters) globalFilters.hidden = !a;
+    remplirPeriodeRapide();
     if (a) {
       const debutInput = $('#global-date-debut');
       const finInput = $('#global-date-fin');
@@ -197,6 +305,8 @@
       $('#dash-sub').textContent = "Importez le fichier « NouvellesSouscriptionOffre » pour calculer vos indicateurs.";
     }
     CT.dashboard.render(); CT.rgz.render(); CT.pointJour.render(); CT.perf.render(); rendreImport();
+    if (CT.factUI) CT.factUI.rafraichir();
+    if (CT.analyseUI) CT.analyseUI.rafraichir();
   }
 
   /* Pré-remplit « Date de début / Date de fin » avec la période du dernier fichier importé. Faux si aucune n'est connue. */
@@ -373,6 +483,7 @@
       const per = await CT.api.souscriptions.periodes();
       if (!per.mois.length) return false;
       etat.bornes = { du: per.du, au: per.au };
+      etat.moisDispo = per.mois;   // mois présents en base (sélecteur « Période rapide »)
       etat.periodeDefaut = per.periode_defaut;   // période du dernier fichier importé (calculée côté serveur)
       const dernier = per.mois[per.mois.length - 1];
       const pl = plage || plageRequise() || { du: dernier.du, au: dernier.au };
@@ -435,8 +546,10 @@
   /* ---------- Démarrage ---------- */
   async function init() {
     // Vue demandée par l'URL (retour depuis parametres.html) affichée tout de suite, sans attendre le chargement des données
-    vue(HASH[location.hash] || 'dashboard');
-    window.addEventListener('hashchange', () => vue(HASH[location.hash] || 'dashboard'));
+    routeHash();
+    window.addEventListener('hashchange', routeHash);
+    // Onglet ouvert dans la page (clic sur la barre de rubriques) : adresse et surbrillance du sidebar suivent
+    document.addEventListener('ct:onglet', (ev) => { const h = SOUS_HASH[ev.detail.cle]; if (!h || etat.vue !== ev.detail.cle) return; history.replaceState(null, '', h + '/' + ev.detail.id); surbrillanceSous(); });
     await assurerXlsx();
     await CT.store.pret;   // paramètres chargés depuis la base avant tout calcul
     themeInit();
@@ -460,7 +573,8 @@
     const sauverDates = () => {
       try {
         const d = debutInput ? debutInput.value : '', f = finInput ? finInput.value : '';
-        if (d || f) sessionStorage.setItem(CLE_DATES, JSON.stringify({ debut: d, fin: f })); else sessionStorage.removeItem(CLE_DATES);
+        // On mémorise aussi la dernière date en base à cet instant : si de nouvelles données arrivent, la période peut suivre
+        if (d || f) sessionStorage.setItem(CLE_DATES, JSON.stringify({ debut: d, fin: f, baseAu: (etat.bornes || {}).au || '' })); else sessionStorage.removeItem(CLE_DATES);
       } catch (_) { /* stockage indisponible : on ignore */ }
     };
     const restaurerDates = () => {
@@ -469,13 +583,24 @@
         if (!s) return false;
         if (debutInput && dateIso(s.debut)) debutInput.value = s.debut;
         if (finInput && dateIso(s.fin)) finInput.value = s.fin;
+        datesSession = s;
         return !!((debutInput && debutInput.value) || (finInput && finInput.value));
       } catch (_) { return false; }
     };
     // Dates mémorisées remises AVANT le premier chargement : la bonne plage (un ou plusieurs mois) est chargée du premier coup.
     // Lignes déjà classées par chargerDonnees ; le calcul et l'affichage sont faits une seule fois, en fin d'init
+    let datesSession = null;
     const datesMemorisees = restaurerDates();
     if (await chargerDonnees()) CT.toast('Données chargées depuis la base de données.', 'info', 4000);
+    // Nouvelles données en base depuis le choix des dates : si l'on regardait la période la plus récente (date de fin = dernière
+    // date en base à ce moment-là), la période avance jusqu'aux nouvelles données ; une période passée choisie volontairement reste.
+    const nouvAu = (etat.bornes || {}).au, ds = datesSession;
+    if (ds && ds.baseAu && nouvAu && nouvAu > ds.baseAu && (!ds.fin || ds.fin >= ds.baseAu) && finInput) {
+      const unMois = !ds.debut || ds.debut.slice(0, 7) === (ds.fin || ds.baseAu).slice(0, 7);
+      finInput.value = nouvAu;
+      if (debutInput && unMois) debutInput.value = nouvAu.slice(0, 7) + '-01';   // vue d'un mois : on passe au mois des nouvelles données
+      CT.toast('Nouvelles données en base jusqu\'au ' + CT.date.court(nouvAu) + ' : période mise à jour.', 'info', 6000);
+    }
     appliquerDates = async () => {
       if (!etat.res) return;
       // Période hors des lignes en mémoire (autre mois, plusieurs mois) : on charge la plage nécessaire depuis la base
@@ -494,6 +619,21 @@
       sauverDates();   // après normaliserPeriode : on mémorise les dates réellement appliquées (bornées, remises dans l'ordre)
     };
     if (debutInput) debutInput.addEventListener('change', appliquerDates);
+    document.addEventListener('click', (ev) => {
+      const p = ev.target.closest('[data-periode]'), g = ev.target.closest('[data-vue-gran]');
+      if (p && debutInput && finInput) { const [d, f] = p.dataset.periode.split('|'); debutInput.value = d; finInput.value = f; appliquerDates(); }
+      else if (g && g.dataset.vueGran !== etat.gran) {
+        etat.gran = g.dataset.vueGran; try { sessionStorage.setItem('ct_vue', etat.gran); } catch (e) { /* stockage indisponible */ }
+        majBarrePeriode(); CT.dashboard.render(); CT.rgz.render(); if (CT.analyseUI) CT.analyseUI.surVue();
+      }
+    });
+    // « Période rapide » : un mois, les 3 derniers mois ou une année entière parmi les mois présents en base (toutes années)
+    const rapide = $('#periode-rapide');
+    if (rapide) rapide.addEventListener('change', () => {
+      const [d, f] = rapide.value.split('|');
+      if (!d || !debutInput || !finInput) return;
+      debutInput.value = d; finInput.value = f; appliquerDates();
+    });
     if (finInput) finInput.addEventListener('change', appliquerDates);
     // « Réinitialiser » revient à la période par défaut (dernier fichier importé), pas à des champs vides
     if (resetBtn) resetBtn.addEventListener('click', () => {
@@ -501,7 +641,11 @@
       appliquerDates();
     });
     // Paramètres modifiés (même page ou autre onglet) → recalcul automatique
-    window.addEventListener('parametersUpdated', () => { if (etat.res) { classerEtCalculer(); rendreTout(); CT.toast('Paramètres mis à jour : rapports recalculés.', 'info', 3500); } });
+    window.addEventListener('parametersUpdated', () => {
+      if (!etat.res) return;
+      if (etat.vue === 'parametres') { etat.recalculAttente = true; return; }   // saisie fluide : recalcul en quittant Paramètres
+      classerEtCalculer(); rendreTout(); CT.toast('Paramètres mis à jour : rapports recalculés.', 'info', 3500);
+    });
     window.addEventListener('beforeunload', (e) => { if (analyseEnCours) { e.preventDefault(); e.returnValue = ''; } });
     // Retour sur la page : on remet les dates mémorisées et on recalcule (charge le bon mois si besoin)
     // Ouverture : dates choisies plus tôt dans la session, sinon période du dernier fichier importé — appliquée tout de suite

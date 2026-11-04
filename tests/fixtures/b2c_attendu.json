@@ -1,0 +1,200 @@
+{
+ "pms_rgz_cmerveille.ftth": {
+  "100M": 2,
+  "50M": 29,
+  "PRO50": 0,
+  "total": 31
+ },
+ "pms_rgz_dconstant.ftth": {
+  "100M": 0,
+  "50M": 19,
+  "PRO50": 0,
+  "total": 19
+ },
+ "pms_rgz_hfrancine.ftth": {
+  "100M": 0,
+  "50M": 40,
+  "PRO50": 0,
+  "total": 40
+ },
+ "pms_rgz_kromeo.ftth": {
+  "100M": 0,
+  "50M": 19,
+  "PRO50": 0,
+  "total": 19
+ },
+ "pms_rgz_svictor.ftth": {
+  "100M": 0,
+  "50M": 45,
+  "PRO50": 0,
+  "total": 45
+ },
+ "pms_rgz_tgloria.ftth": {
+  "100M": 1,
+  "50M": 23,
+  "PRO50": 0,
+  "total": 24
+ },
+ "pms_rgz_tosee.ftth": {
+  "100M": 0,
+  "50M": 32,
+  "PRO50": 0,
+  "total": 32
+ },
+ "pms_rgz_wmarius.ftth": {
+  "100M": 0,
+  "50M": 30,
+  "PRO50": 0,
+  "total": 30
+ },
+ "pvt_rgz_aconstant.ftth": {
+  "100M": 2,
+  "50M": 27,
+  "PRO50": 0,
+  "total": 29
+ },
+ "pvt_rgz_adidier.ftth": {
+  "100M": 0,
+  "50M": 2,
+  "PRO50": 0,
+  "total": 2
+ },
+ "pvt_rgz_afaoziath.ftth": {
+  "100M": 0,
+  "50M": 1,
+  "PRO50": 0,
+  "total": 1
+ },
+ "pvt_rgz_ahugues.ftth": {
+  "100M": 2,
+  "50M": 24,
+  "PRO50": 0,
+  "total": 26
+ },
+ "pvt_rgz_akoffi.ftth": {
+  "100M": 0,
+  "50M": 34,
+  "PRO50": 0,
+  "total": 34
+ },
+ "pvt_rgz_bboris.ftth": {
+  "100M": 1,
+  "50M": 7,
+  "PRO50": 0,
+  "total": 8
+ },
+ "pvt_rgz_cmessinou.ftth": {
+  "100M": 0,
+  "50M": 32,
+  "PRO50": 0,
+  "total": 32
+ },
+ "pvt_rgz_dalexis.ftth": {
+  "100M": 0,
+  "50M": 4,
+  "PRO50": 0,
+  "total": 4
+ },
+ "pvt_rgz_dcharmelie.ftth": {
+  "100M": 0,
+  "50M": 38,
+  "PRO50": 0,
+  "total": 38
+ },
+ "pvt_rgz_dthibaut.ftth": {
+  "100M": 1,
+  "50M": 63,
+  "PRO50": 0,
+  "total": 64
+ },
+ "pvt_rgz_fadji.ftth": {
+  "100M": 0,
+  "50M": 48,
+  "PRO50": 0,
+  "total": 48
+ },
+ "pvt_rgz_gkohla.ftth": {
+  "100M": 0,
+  "50M": 31,
+  "PRO50": 1,
+  "total": 32
+ },
+ "pvt_rgz_gprince.ftth": {
+  "100M": 1,
+  "50M": 31,
+  "PRO50": 0,
+  "total": 32
+ },
+ "pvt_rgz_gsahoui.ftth": {
+  "100M": 0,
+  "50M": 45,
+  "PRO50": 0,
+  "total": 45
+ },
+ "pvt_rgz_hderrick.ftth": {
+  "100M": 0,
+  "50M": 32,
+  "PRO50": 0,
+  "total": 32
+ },
+ "pvt_rgz_kadebayo.ftth": {
+  "100M": 0,
+  "50M": 22,
+  "PRO50": 0,
+  "total": 22
+ },
+ "pvt_rgz_kbernadin.ftth": {
+  "100M": 1,
+  "50M": 35,
+  "PRO50": 0,
+  "total": 36
+ },
+ "pvt_rgz_lsenakpon.ftth": {
+  "100M": 0,
+  "50M": 33,
+  "PRO50": 0,
+  "total": 33
+ },
+ "pvt_rgz_mfrancois.ftth": {
+  "100M": 1,
+  "50M": 41,
+  "PRO50": 0,
+  "total": 42
+ },
+ "pvt_rgz_oalain.ftth": {
+  "100M": 0,
+  "50M": 44,
+  "PRO50": 0,
+  "total": 44
+ },
+ "pvt_rgz_rclotoe.ftth": {
+  "100M": 0,
+  "50M": 35,
+  "PRO50": 0,
+  "total": 35
+ },
+ "pvt_rgz_sulrich.ftth": {
+  "100M": 0,
+  "50M": 43,
+  "PRO50": 0,
+  "total": 43
+ },
+ "pvt_rgz_tletitia.ftth": {
+  "100M": 1,
+  "50M": 27,
+  "PRO50": 0,
+  "total": 28
+ },
+ "pvt_rgz_wdiane.ftth": {
+  "100M": 0,
+  "50M": 45,
+  "PRO50": 0,
+  "total": 45
+ },
+ "pvt-rgz-olouis.ftth": {
+  "100M": 0,
+  "50M": 15,
+  "PRO50": 0,
+  "total": 15
+ }
+}

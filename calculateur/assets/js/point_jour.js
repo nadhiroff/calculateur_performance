@@ -112,6 +112,25 @@
     return !!choix;
   }
 
+  /* Objectifs du mois par équipe et par login (comme Paramètres › Saisie des objectifs, sans primes ni actions), en lecture seule.
+     Indépendant de la période choisie : toujours le mois le plus récent présent en base. */
+  function tableauObjectifsDuMois() {
+    const e = CT.etat, cle = (e.bornes && e.bornes.au ? e.bornes.au : e.jourRef).slice(0, 7), P = CT.store.actifs(cle), obj = P.objectifs, O = CT.objectifs, n = CT.fmt.nat, esc = CT.esc;
+    const v = (x) => Number(x) || 0, t = O.totaux(obj);
+    const lignes = obj.equipes.map((q) => {
+      const b2c = CT.somme(q.logins, (l) => v(l.b2c)), b2b = CT.somme(q.logins, (l) => v(l.b2b));
+      return `<tr class="ligne-equipe"><td><b>${esc(q.id)}</b></td><td>${esc(q.superviseur || '—')}</td><td class="num"><b>${n(b2c)}</b></td><td class="num"><b>${n(b2b)}</b></td><td class="num"><b>${n(b2c + b2b)}</b></td><td class="num"><b>${n(O.jourEq(q, obj))}</b></td><td class="num"><b>${n(O.semEq(q, obj))}</b></td></tr>`
+        + q.logins.map((l) => `<tr><td style="padding-left:22px">${esc(l.login)}</td><td></td><td class="num">${n(v(l.b2c))}</td><td class="num">${n(v(l.b2b))}</td><td class="num">${n(v(l.b2c) + v(l.b2b))}</td><td class="num">${n(O.jourLogin(l, obj))}</td><td class="num">${n(O.semLogin(l, obj))}</td></tr>`).join('');
+    }).join('');
+    return `<section class="card"><div class="card-head"><div><h3>Objectifs du mois — par équipe et par login</h3><p>${esc(CT.date.libelleMois(cle))} (mois le plus récent en base, ne suit pas la période choisie) · valeurs de Paramètres › Saisie des objectifs${P.herite ? ' · mois sans objectifs propres : ceux de ' + esc(CT.date.libelleMois(P.source)) : ''}</p></div></div>
+      <div class="table-wrap"><table class="table-compact objectifs-mois"><caption class="sr-only">Objectifs du mois par équipe et par login</caption>
+        <colgroup><col style="width:30%"><col style="width:16%"><col><col><col><col><col></colgroup>
+        <thead><tr><th scope="col">Équipe / Login</th><th scope="col">Superviseur</th><th scope="col" class="num">Obj. B2C</th><th scope="col" class="num">Obj. B2B</th><th scope="col" class="num">Obj. mois</th><th scope="col" class="num">Obj. jour</th><th scope="col" class="num">Obj. semaine</th></tr></thead>
+        <tbody>${lignes}</tbody>
+        <tfoot><tr><th scope="row">TOTAL</th><td></td><td class="num"><b>${n(t.b2c)}</b></td><td class="num"><b>${n(t.b2b)}</b></td><td class="num"><b>${n(t.mois)}</b></td><td class="num"><b>${n(t.jour)}</b></td><td class="num"><b>${n(t.semaine)}</b></td></tr></tfoot>
+      </table></div></section>`;
+  }
+
   CT.pointJour = {
     render() {
       const e = E(), root = document.getElementById('pj-content');
@@ -136,7 +155,7 @@
         { id: 'equipes', icone: 'fa-people-group', titre: 'Équipes', aide: eqOk + ' / ' + m.equipes.length + ' à l\'objectif' },
         { id: 'vendeurs', icone: 'fa-user-tie', titre: 'Vendeurs', aide: r.agentsAtteints + ' à l\'objectif' },
         { id: 'primes', icone: 'fa-sack-dollar', titre: 'Commissions & primes', aide: 'Qui gagne combien' },
-        { id: 'objectifs', icone: 'fa-bullseye', titre: 'Objectifs', aide: 'Jour, semaine, mois' },
+        { id: 'objectifs', icone: 'fa-bullseye', titre: 'Objectifs à suivre', aide: 'Jour, semaine, mois' },
         { id: 'attention', icone: 'fa-triangle-exclamation', titre: 'À surveiller', aide: aTraiter ? aTraiter + ' point(s)' : 'Rien à signaler', ton: aTraiter ? 'warn' : '' }] });
 
       const RUBRIQUES = {
@@ -242,7 +261,7 @@
           zone.innerHTML = `<div class="stack">${CT.ui.enClair(`Chaque équipe a un objectif <b>du jour</b>, <b>de la semaine</b> et <b>du mois</b>. La barre montre où en est le mois : vert = atteint, bleu = bien parti, orange = en retard, rouge = très en retard.`, 'fa-bullseye')}
             <div class="grid-tuiles">
               ${CT.ui.tuile({ icone: 'fa-calendar-day', ton: CT.ui.tonDe(r.realisation), titre: pl ? 'Objectif de la période' : 'Objectif du jour', valeur: mn(r.objPeriode), p: r.realisation || 0, aide: mn(r.ventesJour) + ' vente(s) faite(s)' })}
-              ${(() => { const sw = CT.periode.semaine(); return CT.ui.tuile({ icone: 'fa-calendar-week', ton: CT.ui.tonDe(sw.objectif ? sw.ventes / sw.objectif : null), titre: 'Semaine', valeur: mn(sw.ventes) + ' / ' + mn(sw.objectif), p: sw.objectif ? sw.ventes / sw.objectif : null, aide: 'Du ' + CT.date.court(sw.du) + ' au ' + CT.date.court(e.jourRef) + ' · toutes équipes' }); })()}
+              ${(() => { const sw = CT.periode.semaine(); return CT.ui.tuile({ icone: 'fa-calendar-week', ton: CT.ui.tonDe(sw.objectif ? sw.ventes / sw.objectif : null), titre: 'Semaine', valeur: mn(sw.ventes) + ' / ' + CT.fmt.nat(sw.objectif), p: sw.objectif ? sw.ventes / sw.objectif : null, aide: 'Du ' + CT.date.court(sw.du) + ' au ' + CT.date.court(e.jourRef) + ' · toutes équipes' }); })()}
               ${CT.ui.tuile({ icone: 'fa-calendar', ton: CT.ui.tonDe(r.tro), titre: m.multiMois ? 'Objectifs des mois' : 'Objectif du mois', valeur: mn(r.objMois), p: r.tro, aide: mn(r.real) + ' faites · reste ' + mn(Math.max(0, r.objMois - r.real)) })}
             </div>
             <section class="card"><div class="card-head"><div><h3>Objectifs par équipe</h3><p>${m.multiMois ? CT.date.libelleMois(m.segments[0].cle) + ' → ' + CT.date.libelleMois(e.cle) + ' · objectifs de chaque mois additionnés' : CT.date.libelleMois(e.cle) + ' · ' + m.nbOuvres + ' jours ouvrés dans le mois'}</p></div></div><div id="pj-obj"></div></section></div>`;
@@ -253,6 +272,7 @@
               { cle: 'reste', titre: 'Reste à faire', num: true, tri: (q) => Math.max(0, q.objMois - q.real), fmt: (v, q) => mn(Math.max(0, q.objMois - q.real)) }],
             pied: { id: 'RÉSEAU', objPeriode: r.objPeriode, ventesJour: r.ventesJour, objSemaine: r.objSemaine, objMois: r.objMois, real: r.real, tro: '', reste: '' } });
           zone.querySelector('#pj-obj').append(t.el);
+          zone.firstElementChild.insertAdjacentHTML('beforeend', tableauObjectifsDuMois());
         },
         attention(zone) {
           // Encadrés : bleu = information de calcul, ambre = point à traiter

@@ -65,7 +65,7 @@
         <section class="card" aria-labelledby="t-alert"><div class="card-head"><div><h3 id="t-alert">Alertes automatiques</h3><p>Écarts vs objectifs, baisses, vendeurs en retard</p></div></div><ul class="alerts" id="alertes"></ul></section>
       </div>
       <section class="card filters-card" aria-labelledby="t-filtres">
-        <div class="card-head"><div><h3 id="t-filtres">Filtres</h3><p>Le recalcul est instantané. Les objectifs ${CT.esc(pr)} ci-dessus restent calculés sur tout le fichier.</p></div><button class="btn btn-ghost btn-sm" id="f-reset" type="button"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Réinitialiser</button></div>
+        <div class="card-head"><div><h3 id="t-filtres">Filtres</h3><p>Le recalcul est instantané. Les objectifs ci-dessus suivent les dates, le partenaire et le statut choisis.</p></div><button class="btn btn-ghost btn-sm" id="f-reset" type="button"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Réinitialiser</button></div>
         <div class="filters">
           <div class="field"><label for="f-du">Du</label><input class="input" type="date" id="f-du"></div>
           <div class="field"><label for="f-au">Au</label><input class="input" type="date" id="f-au"></div>
@@ -79,7 +79,7 @@
         </div>
       </section>
       <div class="grid-2">
-        <section class="card"><div class="card-head"><div><h3>Souscriptions par jour</h3><p>Total et ventes validées (OK)</p></div></div><div class="chart-box"><canvas id="ch-jour" role="img" aria-label="Souscriptions par jour"></canvas></div></section>
+        <section class="card"><div class="card-head"><div><h3>Souscriptions par ${CT.etat.gran || 'jour'}</h3><p>Total et ventes validées (OK)</p></div></div><div class="chart-box"><canvas id="ch-jour" role="img" aria-label="Souscriptions par jour"></canvas></div></section>
         <section class="card"><div class="card-head"><div><h3>Évolution horaire</h3><p>Répartition des souscriptions par heure de la journée</p></div></div><div class="chart-box"><canvas id="ch-heure" role="img" aria-label="Souscriptions par heure"></canvas></div></section>
       </div>
       <div class="grid-2">
@@ -97,17 +97,29 @@
 
   /* ----- Objectifs / alertes : période [début → fin] des filtres (« Jour » = date de fin ; « Mois » = cible mensuelle) ----- */
   function rendreObjectifs() {
-    const e = E(), m = e.motiv, r = m.reseau, sem = CT.periode.semaine(), obj = CT.periode.objectif(), dP = CT.periode.perfDu();
-    const ligne = (titre, reel, cible, note) => `<div class="obj-row"><div class="top"><span>${titre}</span><b class="num">${CT.fmt.pct(cible ? reel / cible : 0)}</b></div>${barre(reel, cible)}<div class="mini-cap">${note}</div></div>`;
-    document.getElementById('obj-sub').textContent = 'Ventes OK ' + e.prioritaire + ' du ' + CT.date.court(dP) + ' au ' + CT.date.court(e.jourRef) + (m.herite ? ' (objectifs hérités d\'un mois précédent)' : '');
-    document.getElementById('obj-grid').innerHTML =
-      ligne('Jour', r.ventesJour, r.objJour, CT.fmt.int(r.ventesJour) + ' / ' + CT.fmt.int(r.objJour) + ' — ' + CT.date.long(e.jourRef)) +
-      ligne('Semaine', sem.ventes, sem.objectif, CT.fmt.int(sem.ventes) + ' / ' + CT.fmt.int(sem.objectif) + ' — du ' + CT.date.court(sem.du) + ' au ' + CT.date.court(e.jourRef)) +
-      ligne('Période', obj.real, obj.objectif, CT.fmt.int(obj.real) + ' / ' + CT.fmt.int(obj.objectif) + ' — objectif du ' + CT.date.court(dP) + ' au ' + CT.date.court(e.jourRef)) +
-      ligne('Mois (cible)', r.real, r.objMois, CT.fmt.int(r.real) + ' / ' + CT.fmt.int(r.objMois) + ' — ' + CT.date.libelleMois(e.cle).toLowerCase() + ', au ' + CT.date.court(e.jourRef));
+    const e = E();
+    blocsObjectifs();
     const ic = { pos: 'succes', warn: 'alerte', neg: 'critique', info: 'info' };
     document.getElementById('alertes').innerHTML = CT.calc.alertes(lignesPeriode(), e.motivPerf).map((a) => `<li class="alert ${a.niveau}"><span class="alert-ic">${CT.icone(ic[a.niveau])}</span><div><strong>${CT.esc(a.titre)}</strong><span>${CT.esc(a.detail)}</span></div></li>`).join('');
     rendreTopEquipes();
+  }
+
+  /* Jour, Semaine, Période, Mois : objectifs de Paramètres › Objectifs (jour, semaine, mois ; période = jour × jours ouvrés)
+     et filtres Du/Au (dates globales), Partenaire et Statut. */
+  function blocsObjectifs() {
+    const e = E(), f = lireFiltres(), pr = f.partenaire || e.prioritaire, dP = CT.periode.perfDu();
+    const jr = CT.periode.jour(f), sem = CT.periode.semaine(f), obj = CT.periode.objectif(f), mo = CT.periode.mois(f);
+    const cible = (b) => (b.objectif == null ? '—' : CT.fmt.nat(b.objectif));
+    const ligne = (titre, b, note) => `<div class="obj-row"><div class="top"><span>${titre}</span><b class="num">${CT.fmt.pct(b.taux)}</b></div>${barre(b.real, b.objectif || 0)}<div class="mini-cap">${CT.fmt.int(b.real)} / ${cible(b)} — ${note}</div></div>`;
+    const statuts = f.statut || (e.motiv.regles.statuts_comptes || ['OK']).join(', ');
+    document.getElementById('t-obj').textContent = 'Objectifs ' + pr;
+    document.getElementById('obj-sub').textContent = 'Ventes ' + statuts + ' ' + pr + ' du ' + CT.date.court(dP) + ' au ' + CT.date.court(e.jourRef)
+      + (pr !== e.prioritaire ? ' — aucun objectif défini pour ce partenaire' : ' · objectifs de Paramètres › Objectifs') + (e.motiv.herite ? ' (objectifs hérités d\'un mois précédent)' : '');
+    document.getElementById('obj-grid').innerHTML =
+      ligne('Jour', jr, CT.date.long(e.jourRef) + (CT.objectifs.estOuvre(CT.store.actifs(e.cle).objectifs, e.jourRef) ? '' : ' · jour non ouvré')) +
+      ligne('Semaine', sem, 'du ' + CT.date.court(sem.du) + ' au ' + CT.date.court(e.jourRef)) +
+      ligne('Période', obj, 'objectif du ' + CT.date.court(dP) + ' au ' + CT.date.court(e.jourRef)) +
+      ligne('Mois (cible)', mo, CT.date.libelleMois(e.cle).toLowerCase() + ', au ' + CT.date.court(e.jourRef));
   }
 
   function rendreTopEquipes() {
@@ -129,18 +141,20 @@
     const e = E(); filtres = lireFiltres();
     const R = e.motiv.regles, seuil = R.seuil_montant_atypique || 1e6;
     const L = CT.calc.filtrer(e.lignes, filtres); e.filtre = L; e.kpiFiltre = CT.calc.kpis(L, { seuil, inclureAtypiques: filtres.inclureAtypiques });
-    const k = e.kpiFiltre, obj = CT.periode.objectif();
+    const k = e.kpiFiltre, obj = CT.periode.objectif(filtres);
+    blocsObjectifs();
     document.getElementById('kpis').innerHTML =
       kpi('fa-file-signature', '', 'Souscriptions', CT.fmt.int(k.total), CT.fmt.int(k.ok) + ' OK · ' + CT.fmt.int(k.b2b) + ' B2B · ' + CT.fmt.int(k.b2c) + ' B2C') +
       kpi('fa-coins', 'pos', 'Chiffre d\'affaires', CT.fmt.fcfa(k.ca), k.atyp ? 'hors ' + k.atyp + ' montant atypique (' + CT.fmt.fcfa(k.atypMontant) + ')' : 'MONTANT_TOTAL cumulé') +
       kpi('fa-circle-check', 'info', 'Taux de réussite', CT.fmt.pct(k.taux, 1), 'STATUS = OK / total') +
       kpi('fa-hourglass-half', 'warn', 'En attente (VALIDE)', CT.fmt.int(k.valide), CT.fmt.pct(k.total ? k.valide / k.total : 0, 1) + ' du total, non comptées') +
       kpi('fa-basket-shopping', '', 'Panier moyen', CT.fmt.fcfa(k.panier), 'CA ÷ souscriptions') +
-      kpi('fa-bullseye', obj.taux != null && obj.taux >= 1 ? 'pos' : 'warn', 'Objectif ' + e.prioritaire + ' — période', obj.taux == null ? '—' : CT.fmt.pct(obj.taux, 1), CT.fmt.int(obj.real) + ' / ' + CT.fmt.int(obj.objectif) + ' ventes OK');
+      kpi('fa-bullseye', obj.taux != null && obj.taux >= 1 ? 'pos' : 'warn', 'Objectif ' + (filtres.partenaire || e.prioritaire) + ' — période', obj.taux == null ? '—' : CT.fmt.pct(obj.taux, 1), CT.fmt.int(obj.real) + ' / ' + (obj.objectif == null ? '—' : CT.fmt.nat(obj.objectif)) + ' ventes ' + (filtres.statut || 'OK'));
     // Graphiques
-    const q = CT.calc.quotidien(L), PAL = palette(), surface = jeton('--surface');
+    // Vue Jour / Semaine / Mois (barre de l'en-tête) : regroupement des comptes journaliers
+    const q = CT.analyseCalc.regrouper(CT.calc.quotidien(L), CT.etat.gran || 'jour'), PAL = palette(), surface = jeton('--surface');
     const barres = { borderRadius: { topLeft: 4, topRight: 4 }, borderSkipped: false, borderWidth: { top: 0, left: 1, right: 1 }, borderColor: surface, maxBarThickness: 22 };
-    chart('ch-jour', { type: 'bar', data: { labels: q.map((d) => d.jour.slice(8) + '/' + d.jour.slice(5, 7)), datasets: [Object.assign({ label: 'Souscriptions', data: q.map((d) => d.n), backgroundColor: PAL[0] }, barres), Object.assign({ label: 'Validées (OK)', data: q.map((d) => d.ok), backgroundColor: PAL[2] }, barres)] }, options: { plugins: { legend: { position: 'bottom' } }, scales: { x: {}, y: { beginAtZero: true } } } });
+    chart('ch-jour', { type: 'bar', data: { labels: q.map((d) => d.lib), datasets: [Object.assign({ label: 'Souscriptions', data: q.map((d) => d.n), backgroundColor: PAL[0] }, barres), Object.assign({ label: 'Validées (OK)', data: q.map((d) => d.ok), backgroundColor: PAL[2] }, barres)] }, options: { plugins: { legend: { position: 'bottom' } }, scales: { x: {}, y: { beginAtZero: true } } } });
     chart('ch-heure', { type: 'line', data: { labels: Array.from({ length: 24 }, (_, i) => i + 'h'), datasets: [{ label: 'Souscriptions', data: CT.calc.horaire(L), borderColor: PAL[0], backgroundColor: alpha(PAL[0], .12), fill: true, tension: .35, borderWidth: 2, pointRadius: 0, pointHoverRadius: 5, pointHoverBorderWidth: 2, pointHoverBorderColor: surface }] }, options: { plugins: { legend: { display: false } }, scales: { x: {}, y: { beginAtZero: true } } } });
     const offres = CT.calc.grouper(L, (l) => l.offre, seuil); const top = offres.slice(0, 7), autres = CT.somme(offres.slice(7), (g) => g.n);
     const dOff = top.map((g) => ({ n: g.cle, v: g.n })).concat(autres ? [{ n: 'Autres offres', v: autres }] : []);
@@ -250,24 +264,25 @@
     refreshTheme() { if (E().lignes.length) rendreFiltre(); synthese(); },
 
     resume() {
-      const e = E(), k = e.kpiFiltre || CT.calc.kpis(e.lignes), r = e.motiv.reseau;
+      const e = E(), k = e.kpiFiltre || CT.calc.kpis(e.lignes), f = lireFiltres(), jr = CT.periode.jour(f), ob = CT.periode.objectif(f);
       const top = CT.calc.grouper(e.filtre || e.lignes, (l) => l.loginKey).slice(0, 3).map((g) => CT.loginCourt(g.cle) + ' (' + g.n + ')').join(', ');
       return [
         'Rapport souscriptions Celtiis — du ' + CT.date.court(periodeDash().du) + ' au ' + CT.date.court(periodeDash().au),
         '• Souscriptions : ' + CT.fmt.int(k.total) + ' (' + CT.fmt.int(k.ok) + ' OK, ' + CT.fmt.int(k.valide) + ' en attente)',
         '• CA : ' + CT.fmt.fcfa(k.ca) + ' — panier moyen ' + CT.fmt.fcfa(k.panier),
         '• Taux de réussite : ' + CT.fmt.pct(k.taux, 1),
-        '• Objectif ' + e.prioritaire + ' : jour ' + CT.fmt.int(r.ventesJour) + '/' + CT.fmt.int(r.objJour) + ' (' + CT.fmt.pct(r.realisation) + '), période ' + CT.fmt.int(CT.periode.objectif().real) + '/' + CT.fmt.int(CT.periode.objectif().objectif) + (CT.periode.objectif().taux == null ? '' : ' (' + CT.fmt.pct(CT.periode.objectif().taux, 1) + ')'),
+        '• Objectif ' + (f.partenaire || e.prioritaire) + ' : jour ' + CT.fmt.int(jr.real) + '/' + CT.fmt.nat(jr.objectif) + ' (' + CT.fmt.pct(jr.taux) + '), période ' + CT.fmt.int(ob.real) + '/' + CT.fmt.nat(ob.objectif) + (ob.taux == null ? '' : ' (' + CT.fmt.pct(ob.taux, 1) + ')'),
         top ? '• Top vendeurs : ' + top : '',
       ].filter(Boolean).map(CT.fmt.txt).join('\n');
     },
     feuilles() {
-      const e = E(), L = e.filtre || e.lignes, k = e.kpiFiltre || CT.calc.kpis(L), r = e.motiv.reseau;
+      const e = E(), L = e.filtre || e.lignes, k = e.kpiFiltre || CT.calc.kpis(L), f = lireFiltres(), pr = f.partenaire || e.prioritaire;
+      const ob = CT.periode.objectif(f), mo = CT.periode.mois(f), jr = CT.periode.jour(f), v = (x) => (x == null ? '' : x);
       return [
         { nom: 'KPI', aoa: [['Indicateur', 'Valeur'], ['Période', CT.date.court(periodeDash().du) + ' → ' + CT.date.court(periodeDash().au)], ['Souscriptions', k.total], ['Ventes validées (OK)', k.ok], ['En attente (VALIDE)', k.valide],
           ['Taux de réussite', k.taux], ['CA (FCFA)', k.ca], ['Panier moyen (FCFA)', Math.round(k.panier)], ['B2B', k.b2b], ['B2C', k.b2c],
-          ['Objectif ' + e.prioritaire + ' de la période', CT.periode.objectif().objectif], ['Réalisé ' + e.prioritaire + ' de la période (OK)', CT.periode.objectif().real], ['% atteinte période', CT.periode.objectif().taux == null ? '' : CT.periode.objectif().taux],
-          ['Objectif ' + e.prioritaire + ' du mois', r.objMois], ['Réalisé ' + e.prioritaire + ' du mois (OK)', r.real], ['Objectif du jour', r.objJour], ['Ventes du jour', r.ventesJour]], cols: [34, 24] },
+          ['Objectif ' + pr + ' de la période', v(ob.objectif)], ['Réalisé ' + pr + ' de la période', ob.real], ['% atteinte période', v(ob.taux)],
+          ['Objectif ' + pr + ' du mois', v(mo.objectif)], ['Réalisé ' + pr + ' du mois', mo.real], ['Objectif du jour', v(jr.objectif)], ['Ventes du jour', jr.real]], cols: [34, 24] },
         { nom: 'Top vendeurs', aoa: [['Vendeur', 'Souscriptions', 'OK']].concat(CT.calc.grouper(L, (l) => l.loginKey).slice(0, 20).map((g) => [g.cle, g.n, g.ok])), cols: [32, 14, 10] },
         { nom: 'Top agences', aoa: [['Agence', 'Souscriptions', 'OK', 'CA (FCFA)']].concat(CT.calc.grouper(L, (l) => l.agence).slice(0, 20).map((g) => [g.cle, g.n, g.ok, g.ca])), cols: [32, 14, 10, 16] },
         { nom: 'Offres', aoa: [['Offre', 'Souscriptions', 'OK', 'CA (FCFA)']].concat(CT.calc.grouper(L, (l) => l.offre).map((g) => [g.cle, g.n, g.ok, g.ca])), cols: [44, 14, 10, 16] },

@@ -38,6 +38,11 @@
       for (let i = 0; i < reste; i++) result[i]++;
       return result;
     },
+    /* Objectifs du Tableau de bord = valeurs de Paramètres › Objectifs (ligne TOTAL : jour, semaine, mois), sans recalcul ni arrondi.
+       Objectif d'une période = objectif du jour × jours ouvrés de la période (calendrier de Paramètres).
+       `cle` (AAAA-MM) est passé à part : un mois aux objectifs hérités garde son propre calendrier de dates. */
+    ouvresEntre: (obj, cle, du, au) => obj.calendrier.ouvres.filter((d) => { const j = cle + '-' + String(d).padStart(2, '0'); return j >= du && j <= au; }).length,
+    objectifPeriode: (obj, cle, du, au) => CT.objectifs.totaux(obj).jour * CT.objectifs.ouvresEntre(obj, cle, du, au),
     /* Map cleLogin → {login, equipe, b2c, b2b, mois, primes, partRgz} */
     indexLogins(obj) {
       const m = new Map();

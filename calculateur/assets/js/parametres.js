@@ -8,6 +8,8 @@
   const CT = window.CT;
   const { h, $, $$ } = CT;
   let cle = null, filtre = '', onglet = 'obj';
+  // Page intégrée à l'application (index.php) : pas de rechargement ; le thème, le menu mobile et l'en-tête sont gérés par app.js
+  const EMBARQUE = !!document.getElementById('view-dashboard');
   const P = () => CT.store.get().periodes[cle];
   const nombre = (v) => { const n = parseFloat(String(v).replace(',', '.')); return isFinite(n) ? n : 0; };
 
@@ -333,13 +335,8 @@
       const o = {}; nominatif.forEach((x) => { const p = String(x.p).trim().toUpperCase(); if (x.l && p) (o[p] = o[p] || []).push(x.l); });
       C.logins_partenaire = o;
     };
-    const anneeCourante = new Date().getFullYear();
-    const histo = C.historique || { annee: anneeCourante, mois: [], partenaires: {} };
-    // Mettre à jour l'année automatiquement si elle est différente
-    if (histo.annee !== anneeCourante) {
-      histo.annee = anneeCourante;
-      enregistrer();
-    }
+    // Année de l'historique : fournie par le serveur, qui suit l'année des données en base (et non la date du PC)
+    const histo = C.historique || { annee: new Date().getFullYear(), mois: [], partenaires: {} };
     const hl = Object.entries(histo.partenaires).map(([n, v]) => ({ n, v }));
     const histoSync = () => { histo.partenaires = Object.fromEntries(hl.map((x) => [x.n.toUpperCase(), x.v])); };
     root.replaceChildren(h('div', { class: 'stack' },
@@ -404,9 +401,7 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && onglet === 'part') actualiserHistorique(); });
 
   function mettreAJourUrl() {
-    const newUrl = new URL(window.location);
-    newUrl.searchParams.set('periode', cle);
-    window.history.replaceState({}, '', newUrl);
+    if (!EMBARQUE) { const newUrl = new URL(window.location); newUrl.searchParams.set('periode', cle); window.history.replaceState({}, '', newUrl); }
     // Mémorisation dans le sessionStorage pour éviter la réinitialisation intempestive
     sessionStorage.setItem('derniere_periode', cle);
   }
@@ -432,9 +427,17 @@
       rendreTout();
     });
     $$('#tabs [role=tab]').forEach((b) => b.addEventListener('click', () => choisirOnglet(b.id.replace('tab-', ''))));
+    // Sous-menus du sidebar : parametres.php#obj | #regles | #part | #save ouvrent la section ; la surbrillance suit l'onglet
+    const ONGLETS_P = ['obj', 'regles', 'part', 'save'];
+    const marquer = (o) => $$('#nav a[data-sous^="parametres/"]').forEach((x) => { if (x.dataset.sous === 'parametres/' + o) x.setAttribute('aria-current', 'page'); else x.removeAttribute('aria-current'); });
+    // Adresse : #regles (page seule) ou #parametres/regles (page de l'application) ; les adresses des autres pages sont ignorées
+    const depuisHash = () => { const m = /^#(?:parametres\/)?(\w+)$/.exec(location.hash), o = m ? m[1] : null; if (EMBARQUE && !/^#parametres/.test(location.hash)) return; if (ONGLETS_P.includes(o) && o !== onglet) choisirOnglet(o); marquer(ONGLETS_P.includes(o) ? o : onglet); };
+    $$('#tabs [role=tab]').forEach((b) => b.addEventListener('click', () => { const o = b.id.replace('tab-', ''); history.replaceState(null, '', (EMBARQUE ? '#parametres/' : '#') + o); marquer(o); }));
+    window.addEventListener('hashchange', depuisHash);
+    setTimeout(depuisHash, 0);   // après la fin de l'initialisation (premier rendu)
     $('#tabs').addEventListener('keydown', (e) => { if (!['ArrowLeft', 'ArrowRight'].includes(e.key)) return; const t = $$('#tabs [role=tab]'), i = t.findIndex((x) => x.getAttribute('aria-selected') === 'true'); const n = t[(i + (e.key === 'ArrowRight' ? 1 : t.length - 1)) % t.length]; n.focus(); n.click(); });
-    // Menu mobile
-    const btn = $('#mobile-menu-btn');
+    // Menu mobile (page seule uniquement : dans l'application, app.js le gère déjà)
+    const btn = EMBARQUE ? null : $('#mobile-menu-btn');
     const nav = $('.nav-tabs');
     const overlay = $('#mobile-overlay');
     if (btn && nav) {
@@ -510,9 +513,11 @@
     // Thème (partagé avec la page principale)
     const T = ['auto', 'light', 'dark'], I = { auto: 'fa-circle-half-stroke', light: 'fa-sun', dark: 'fa-moon' };
     const ap = (t) => { document.documentElement.setAttribute('data-theme', t); $('#theme-btn').innerHTML = '<i class="fa-solid ' + I[t] + '" aria-hidden="true"></i><span class="sr-only">Thème : ' + t + '</span>'; };
-    ap('auto');
-    $('#theme-btn').addEventListener('click', () => ap(T[(T.indexOf(document.documentElement.getAttribute('data-theme')) + 1) % 3]));
-    window.addEventListener('scroll', () => $('.app-header').classList.toggle('is-scrolled', window.scrollY > 4), { passive: true });
+    if (!EMBARQUE) {
+      ap('auto');
+      $('#theme-btn').addEventListener('click', () => ap(T[(T.indexOf(document.documentElement.getAttribute('data-theme')) + 1) % 3]));
+      window.addEventListener('scroll', () => $('.app-header').classList.toggle('is-scrolled', window.scrollY > 4), { passive: true });
+    }
     // Restaurer l'onglet sauvegardé au démarrage
     choisirOnglet(onglet);
   }
