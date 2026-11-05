@@ -12,6 +12,7 @@ button { font: inherit; }
 
 /* ---------- Menu ---------- */
 .menu { position: sticky; top: 0; height: 100vh; height: 100dvh; overflow-y: auto; background: var(--side-bg); color: var(--side-text); padding: 18px 14px; display: flex; flex-direction: column; gap: 4px; z-index: 40; }
+.menu > * { flex-shrink: 0; }   /* rien ne se tasse quand un groupe s'ouvre : le menu défile */
 .menu-marque { display: flex; align-items: center; gap: 10px; padding: 0 6px 16px; border-bottom: 1px solid var(--side-border); margin-bottom: 12px; }
 .menu-marque img { width: 36px; height: 36px; border-radius: 9px; background: #fff; padding: 3px; }
 .menu-marque b { display: block; color: #fff; font-family: var(--font-title); font-size: 1rem; }
@@ -19,7 +20,7 @@ button { font: inherit; }
 .menu-qui { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 12px; background: var(--side-hover); border: 1px solid var(--side-border); margin-bottom: 14px; }
 .menu-qui .avatar { width: 34px; height: 34px; flex: none; border-radius: 10px; display: grid; place-items: center; background: rgba(242,160,7,.18); color: #FFD27A; }
 .menu-qui span { min-width: 0; }
-.menu-qui b { display: block; color: #fff; font-size: .8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.menu-qui b { display: block; color: #fff; font-size: .8rem; line-height: 1.45; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }   /* hauteur suffisante : « _ », g, p jamais rognés */
 .menu-qui small { color: #FFD27A; font-size: .72rem; font-weight: 600; }
 .menu a { display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 10px; color: var(--side-text); text-decoration: none; font-weight: 500; font-size: .875rem; transition: background var(--t-fast), color var(--t-fast); }
 .menu a i { width: 18px; text-align: center; color: var(--side-muted); }
@@ -255,7 +256,6 @@ table.ventes .o-mob { display: none; color: var(--text-3); font-size: .7rem; }
   body.menu-ouvert .menu { transform: none; }
   /* Hauteur = partie visible de l'écran (barres du téléphone déduites) + marge de la zone système : le bas du menu reste visible */
   .menu { bottom: auto; height: 100vh; height: 100dvh; padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px)); overscroll-behavior: contain; }
-  .menu > * { flex-shrink: 0; }
   .voile { position: fixed; inset: 0; z-index: 35; background: rgba(8,20,48,.5); backdrop-filter: blur(2px); }
   body.menu-ouvert .voile { display: block; }
   body.menu-ouvert { overflow: hidden; }

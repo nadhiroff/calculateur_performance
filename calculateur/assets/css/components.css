@@ -19,6 +19,9 @@
   border-right: 1px solid var(--side-border);
   background-image: radial-gradient(120% 60% at 0% 0%, rgba(36, 80, 211, .22), transparent 60%);
 }
+/* Aucun élément du menu ne se tasse : quand un groupe (ex. Paramètres) s'ouvre et que le menu dépasse l'écran, certains
+   navigateurs (téléphones surtout) écrasaient le bloc du compte (« RGZ / rgz@rgz.bj » coupé) au lieu de faire défiler. */
+.sidebar > * { flex-shrink: 0; }
 .sidebar .brand { display: flex; align-items: center; gap: var(--sp-3); padding: 0 var(--sp-2) var(--sp-5); margin-bottom: var(--sp-2); border-bottom: 1px solid var(--side-border); text-decoration: none; color: #fff; }
 .sidebar .brand img { width: 36px; height: 36px; flex: none; object-fit: contain; border-radius: 10px; background: #fff; padding: 3px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .12); }
 .brand-txt { font-family: var(--font-title); font-weight: 800; font-size: var(--fs-16); letter-spacing: -.01em; line-height: 1.2; }
@@ -53,7 +56,9 @@
 /* Administrateur connecté + déconnexion (au-dessus du pied de menu) */
 .nav-user { margin-top: auto; display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2); border-radius: var(--r-md); background: var(--side-hover); border: 1px solid var(--side-border); }
 .nav-user-ic { flex: none; width: 32px; height: 32px; border-radius: var(--r-sm); display: grid; place-items: center; background: rgba(255, 255, 255, .08); color: var(--side-text); font-size: var(--fs-13); }
-.nav-user-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+/* line-height 1.45 : l'email est coupé à la hauteur de sa ligne (overflow pour les « … ») ; trop serrée, le bas des
+   lettres (g, j, p) était rogné sur téléphone */
+.nav-user-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.45; }
 .nav-user-txt b { color: #fff; font-size: var(--fs-13); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .nav-user-txt small { color: var(--side-muted); font-size: var(--fs-11); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .nav-user form { margin: 0; }
@@ -166,7 +171,6 @@
      au lieu de toute la hauteur de la page dont le bas passe sous ces barres ; marge du bas pour la zone système
      (barre d'accueil iPhone, gestes Android). Le bas du menu (compte, déconnexion, pied) reste atteignable en faisant défiler. */
   .sidebar { bottom: auto; height: 100vh; height: 100dvh; padding-bottom: calc(var(--sp-4) + env(safe-area-inset-bottom, 0px)); overscroll-behavior: contain; }
-  .sidebar > * { flex-shrink: 0; }
   #mobile-menu-btn { display: inline-flex; align-items: center; justify-content: center; }
   .topbar-brand { display: inline-flex; }
   .topbar-brand img { width: 30px; height: 30px; flex: none; object-fit: contain; border-radius: 8px; background: #fff; padding: 2px; }
