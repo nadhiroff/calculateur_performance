@@ -58,9 +58,8 @@
 .nav-user-ic { flex: none; width: 32px; height: 32px; border-radius: var(--r-sm); display: grid; place-items: center; background: rgba(255, 255, 255, .08); color: var(--side-text); font-size: var(--fs-13); }
 /* line-height 1.45 : l'email est coupé à la hauteur de sa ligne (overflow pour les « … ») ; trop serrée, le bas des
    lettres (g, j, p) était rogné sur téléphone */
-.nav-user-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.45; }
-.nav-user-txt b { color: #fff; font-size: var(--fs-13); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.nav-user-txt small { color: var(--side-muted); font-size: var(--fs-11); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nav-user-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; text-align: center; line-height: 1.45; }   /* nom seul (sans email), centré entre l'icône et la déconnexion */
+.nav-user-txt b { max-width: 100%; color: #fff; font-size: var(--fs-14); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .nav-user form { margin: 0; }
 .nav-logout { width: 32px; height: 32px; border-radius: var(--r-sm); border: 0; background: transparent; color: var(--side-muted); cursor: pointer; display: grid; place-items: center; transition: background var(--t-fast), color var(--t-fast); }
 .nav-logout:hover { background: rgba(229, 72, 77, .18); color: #FF9A9D; }

@@ -23,7 +23,7 @@ $ouvert = static fn (string $g): string => in_array($g, $menuOuvert, true) ? ' o
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous">
   <link rel="stylesheet" href="assets/css/design-system.css?v=20261021-15">
-  <link rel="stylesheet" href="assets/css/components.css?v=20261105-n3">
+  <link rel="stylesheet" href="assets/css/components.css?v=20261105-n4">
   <link rel="stylesheet" href="assets/css/dashboard.css?v=20261105-p1">
   <link rel="stylesheet" href="assets/css/print.css?v=20261021-15">
   <style>/* Page Paramètres (reprise de parametres.php, limitée à #view-parametres) */
@@ -121,7 +121,7 @@ $ouvert = static fn (string $g): string => in_array($g, $menuOuvert, true) ? ' o
       </details>
       <div class="nav-user" data-inactivite="<?= App\Auth::inactiviteAdmin() ?>">
         <span class="nav-user-ic" aria-hidden="true"><i class="fa-solid fa-user-shield"></i></span>
-        <span class="nav-user-txt"><b><?= $h($admin['nom'] ?: 'Administrateur') ?></b><small><?= $h($admin['email']) ?></small></span>
+        <span class="nav-user-txt"><b title="Compte connecté : <?= $h($admin['nom'] ?: 'Administrateur') ?>"><?= $h($admin['nom'] ?: 'Administrateur') ?></b></span>
         <form method="post" action="deconnexion.php"><input type="hidden" name="csrf" value="<?= $h($jeton) ?>"><button type="submit" class="nav-logout" title="Se déconnecter" aria-label="Se déconnecter"><i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i></button></form>
       </div>
       <div class="nav-foot">
