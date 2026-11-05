@@ -338,3 +338,5 @@ table.ventes .o-mob { display: none; color: var(--text-3); font-size: .7rem; }
 .annonce .confettis i { position: absolute; top: -12px; width: 8px; height: 14px; border-radius: 2px; opacity: .9; animation: tomber linear forwards; }
 @keyframes tomber { to { transform: translateY(110vh) rotate(720deg); } }
 @media (max-width: 400px) { .annonce .boite { padding: 20px 16px 16px; } .annonce .chiffres b { font-size: 1.15rem; } }
+/* Feu d'artifice derrière le message d'accueil (champion du jour) : n'intercepte aucun clic */
+.annonce .feu { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }

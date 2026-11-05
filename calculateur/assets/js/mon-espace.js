@@ -477,7 +477,8 @@
     voile.innerHTML = `<div class="boite"><span class="ic"><i class="fa-solid ${ic}" aria-hidden="true"></i></span><h2 id="annonce-titre">${titre}</h2>${corps}
       <button type="button" class="ok">Voir mes résultats <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></button></div>${ch && ch.moi ? '<div class="confettis" aria-hidden="true"></div>' : ''}`;
     document.body.appendChild(voile);
-    const fermer = () => { voile.remove(); document.removeEventListener('keydown', echap); };
+    const arreter = ch ? feuArtifice(voile, ch.moi ? 5200 : 3200, ch.moi ? 1 : 0.55) : () => {};   // champion : fête ; plus grande si c'est lui
+    const fermer = () => { arreter(); voile.remove(); document.removeEventListener('keydown', echap); };
     const echap = (e) => { if (e.key === 'Escape') fermer(); };
     voile.querySelector('.ok').addEventListener('click', fermer);
     voile.addEventListener('click', (e) => { if (e.target === voile) fermer(); });
@@ -488,6 +489,57 @@
       const couleurs = ['#2450D3', '#12A672', '#F2A007', '#E5484D', '#7FA6FF'];
       for (let i = 0; i < 50; i++) { const c = document.createElement('i'); c.style.left = Math.random() * 100 + '%'; c.style.background = couleurs[i % couleurs.length]; c.style.animationDuration = 2.4 + Math.random() * 2 + 's'; c.style.animationDelay = Math.random() * .8 + 's'; conf.appendChild(c); }
     }
+  }
+
+  /* Feu d'artifice (canvas, sans bibliothèque) derrière le message d'accueil : fusées qui montent et éclatent en étincelles.
+     duree : temps pendant lequel de nouvelles fusées partent ; force : nombre de fusées et d'étincelles (0 à 1).
+     Rien si le téléphone demande moins d'animations. Renvoie la fonction qui arrête tout (fermeture du message). */
+  function feuArtifice(parent, duree, force) {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return () => {};
+    const cv = document.createElement('canvas'), ctx = cv.getContext('2d');
+    if (!ctx) return () => {};
+    cv.className = 'feu'; cv.setAttribute('aria-hidden', 'true'); parent.prepend(cv);
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const taille = () => { cv.width = innerWidth * dpr; cv.height = innerHeight * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); };
+    taille(); window.addEventListener('resize', taille);
+    const couleurs = ['#FFD27A', '#F2A007', '#7FA6FF', '#2450D3', '#12A672', '#E5484D', '#FFFFFF'];
+    const fusees = [], etincelles = [], cadence = 520 - 260 * force;
+    let debut = performance.now();
+    let derniere = -1e9, fin = false, raf = 0;
+    const lancer = () => fusees.push({ x: innerWidth * (0.15 + Math.random() * 0.7), y: innerHeight + 10, vx: (Math.random() - 0.5) * 1.2,
+      vy: -(innerHeight / 90) * (0.85 + Math.random() * 0.35), c: couleurs[Math.floor(Math.random() * couleurs.length)] });
+    const eclater = (f) => {
+      const n = Math.round(40 + 50 * force), c2 = Math.random() < 0.5 ? f.c : couleurs[Math.floor(Math.random() * couleurs.length)];
+      for (let i = 0; i < n; i++) {
+        const a = (Math.PI * 2 * i) / n, v = 1.5 + Math.random() * 3.2;
+        etincelles.push({ x: f.x, y: f.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, vie: 1, c: i % 3 ? f.c : c2 });
+      }
+    };
+    const image = () => {
+      if (fin) return;
+      const t = performance.now();   // même horloge que « debut » (l'heure fournie par requestAnimationFrame peut en différer)
+      if (t - debut < duree && t - derniere > cadence) { derniere = t; lancer(); if (force > 0.8 && Math.random() < 0.4) lancer(); }
+      ctx.globalCompositeOperation = 'destination-out'; ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fillRect(0, 0, innerWidth, innerHeight);   // traînées qui s'effacent
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = fusees.length - 1; i >= 0; i--) {
+        const f = fusees[i]; f.x += f.vx; f.y += f.vy; f.vy += 0.12;
+        ctx.fillStyle = f.c; ctx.beginPath(); ctx.arc(f.x, f.y, 2.2, 0, Math.PI * 2); ctx.fill();
+        if (f.vy >= -1) { eclater(f); fusees.splice(i, 1); }   // sommet de la course : éclatement
+      }
+      for (let i = etincelles.length - 1; i >= 0; i--) {
+        const e = etincelles[i]; e.x += e.vx; e.y += e.vy; e.vx *= 0.985; e.vy = e.vy * 0.985 + 0.05; e.vie -= 0.014;
+        if (e.vie <= 0) { etincelles.splice(i, 1); continue; }
+        ctx.globalAlpha = e.vie; ctx.fillStyle = e.c; ctx.beginPath(); ctx.arc(e.x, e.y, 1.8, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      if (t - debut > duree && !fusees.length && !etincelles.length) { arreter(); return; }
+      raf = requestAnimationFrame(image);
+    };
+    const arreter = () => { if (fin) return; fin = true; cancelAnimationFrame(raf); window.removeEventListener('resize', taille); cv.remove(); };
+    // Départ après l'apparition du message (0,45 s) : la boîte s'affiche d'abord, les fusées partent ensuite
+    const depart = setTimeout(() => { if (!fin) { debut = performance.now(); raf = requestAnimationFrame(image); } }, 450);
+    const securite = setTimeout(arreter, duree + 4500);   // arrêt garanti, même si l'onglet est en arrière-plan
+    return () => { clearTimeout(depart); clearTimeout(securite); arreter(); };
   }
 
   /* Message au commercial qui n'a pas le titre : objectif atteint (il lui manquait peu) ou pas encore */
