@@ -66,6 +66,7 @@ $routes = [
 
     // Session administrateur prolongée tant que la page est utilisée
     ['GET', 'session', [SessionController::class, 'maintenir']],
+    ['POST', 'session/menu', [SessionController::class, 'menu']],   // groupes du menu ouverts (rouverts à l'actualisation)
 
     // Espace commercial RGZ : ses résultats et ceux de son équipe (commercial identifié ou administrateur)
     ['GET', 'agent/tableau', [AgentController::class, 'tableau']],

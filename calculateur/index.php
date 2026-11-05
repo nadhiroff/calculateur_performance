@@ -4,6 +4,9 @@ require dirname(__DIR__).'/vendor/autoload.php';
 $admin = App\Auth::exiger('index.php');
 $jeton = App\Auth::jeton();
 $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+// Groupes du menu laissés ouverts (session serveur) ; jamais modifiés : Facturation ouvert par défaut
+$menuOuvert = App\Auth::menuAdmin() ?? ['facturation'];
+$ouvert = static fn (string $g): string => in_array($g, $menuOuvert, true) ? ' open' : '';
 ?>
 <!DOCTYPE html>
 <html lang="fr" data-theme="auto">
@@ -59,13 +62,13 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
       <a class="brand" href="#dashboard" aria-label="POWERGZ — accueil"><img src="assets/img/logoRGZ-128.png" alt="" width="36" height="36"><span class="brand-txt">POWERGZ</span></a>
       <div class="nav-section">Pilotage</div>
       <a href="#dashboard" data-vue="dashboard"><i class="fa-solid fa-chart-pie" aria-hidden="true"></i>Tableau de bord</a>
-      <details class="nav-group" data-groupe="rgz">
+      <details class="nav-group" data-groupe="rgz"<?= $ouvert('rgz') ?>>
         <summary><i class="fa-solid fa-star" aria-hidden="true"></i>Tableau de bord RGZ</summary>
         <a href="#rgz/apercu" data-sous="rgz/apercu"><i class="fa-solid fa-star" aria-hidden="true"></i>Vue d'ensemble</a>
         <a href="#rgz/evolution" data-sous="rgz/evolution"><i class="fa-solid fa-chart-line" aria-hidden="true"></i>Progression et évolution</a>
         <a href="#rgz/alertes" data-sous="rgz/alertes"><i class="fa-solid fa-bell" aria-hidden="true"></i>Alertes et recommandations</a>
       </details>
-      <details class="nav-group" data-groupe="pointjour">
+      <details class="nav-group" data-groupe="pointjour"<?= $ouvert('pointjour') ?>>
         <summary><i class="fa-solid fa-calendar-day" aria-hidden="true"></i>Point du jour</summary>
         <a href="#point-du-jour/resume" data-sous="pointjour/resume"><i class="fa-solid fa-house" aria-hidden="true"></i>Résumé</a>
         <a href="#point-du-jour/equipes" data-sous="pointjour/equipes"><i class="fa-solid fa-people-group" aria-hidden="true"></i>Équipes</a>
@@ -74,7 +77,7 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
         <a href="#point-du-jour/objectifs" data-sous="pointjour/objectifs"><i class="fa-solid fa-bullseye" aria-hidden="true"></i>Objectifs à suivre</a>
         <a href="#point-du-jour/attention" data-sous="pointjour/attention"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>À surveiller</a>
       </details>
-      <details class="nav-group" data-groupe="perf">
+      <details class="nav-group" data-groupe="perf"<?= $ouvert('perf') ?>>
         <summary><i class="fa-solid fa-ranking-star" aria-hidden="true"></i>Performance partenaires</summary>
         <a href="#performance/apercu" data-sous="perf/apercu"><i class="fa-solid fa-star" aria-hidden="true"></i>RGZ en bref</a>
         <a href="#performance/b2b" data-sous="perf/b2b"><i class="fa-solid fa-building" aria-hidden="true"></i>Ventes B2B</a>
@@ -85,7 +88,7 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
       </details>
       <div class="nav-section">Analyse</div>
       <a href="#comparaisons" data-vue="comparaisons"><i class="fa-solid fa-code-compare" aria-hidden="true"></i>Comparaisons</a>
-      <details class="nav-group" data-groupe="previsions">
+      <details class="nav-group" data-groupe="previsions"<?= $ouvert('previsions') ?>>
         <summary><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>Prévisions</summary>
         <a href="#previsions/projection" data-sous="previsions/projection"><i class="fa-solid fa-calendar" aria-hidden="true"></i>Projection mensuelle</a>
         <a href="#previsions/parametres" data-sous="previsions/parametres"><i class="fa-solid fa-sliders" aria-hidden="true"></i>Paramètres par mois</a>
@@ -96,7 +99,7 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
       <a href="#challenge-login" data-vue="challogin"><i class="fa-solid fa-user-astronaut" aria-hidden="true"></i>Challenge login</a>
       <a href="#challenge-equipe" data-vue="chalequipe"><i class="fa-solid fa-people-group" aria-hidden="true"></i>Challenge équipe</a>
       <!-- Menu « Facturation » et ses sous-menus -->
-      <details class="nav-group" data-groupe="facturation" open>
+      <details class="nav-group" data-groupe="facturation"<?= $ouvert('facturation') ?>>
         <summary><i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i>Facturation</summary>
         <a href="#facturation" data-vue="factdash"><i class="fa-solid fa-gauge-high" aria-hidden="true"></i>Résumé</a>
         <a href="#facturation-b2b" data-vue="factb2b"><i class="fa-solid fa-building" aria-hidden="true"></i>Facture B2B</a>
@@ -108,7 +111,7 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
         <a href="#reports" data-vue="reports"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>Reports</a>
       </details>
       <div class="nav-section">Configuration</div>
-      <details class="nav-group" data-groupe="parametres">
+      <details class="nav-group" data-groupe="parametres"<?= $ouvert('parametres') ?>>
         <summary><i class="fa-solid fa-sliders" aria-hidden="true"></i>Paramètres</summary>
         <a href="#parametres/obj" data-sous="parametres/obj"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>Saisie des objectifs</a>
         <a href="#parametres/regles" data-sous="parametres/regles"><i class="fa-solid fa-scale-balanced" aria-hidden="true"></i>Règles de motivation</a>
@@ -327,6 +330,6 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
   <script src="assets/js/analyse_calc.js?v=20261104-e1" defer></script>
   <script src="assets/js/analyse.js?v=20261104-k1" defer></script>
   <script src="assets/js/parametres.js?v=20261105-l1" defer></script>
-  <script src="assets/js/app.js?v=20261105-r1" defer></script>
+  <script src="assets/js/app.js?v=20261105-g1" defer></script>
 </body>
 </html>

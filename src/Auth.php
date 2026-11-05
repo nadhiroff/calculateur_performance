@@ -59,6 +59,28 @@ final class Auth
         return $a;
     }
 
+    /**
+     * Groupes du menu (sidebar) que l'administrateur a laissés ouverts : gardés dans la session du serveur (rien dans le
+     * navigateur), pour les rouvrir à l'actualisation. null : jamais modifiés (ouverture par défaut de la page).
+     *
+     * @return string[]|null
+     */
+    public static function menuAdmin(): ?array
+    {
+        self::demarrer(true);
+        $m = $_SESSION['menu_admin'] ?? null;
+
+        return is_array($m) ? $m : null;
+    }
+
+    /** @param string[] $groupes */
+    public static function enregistrerMenuAdmin(array $groupes): void
+    {
+        self::demarrer(false, false);   // sans Set-Cookie (la session existe déjà : administrateur connecté)
+        $_SESSION['menu_admin'] = array_values(array_unique(array_filter($groupes, static fn ($g) => is_string($g) && preg_match('/^[a-z]{1,30}$/', $g))));
+        session_write_close();
+    }
+
     /** Minutes sans activité avant déconnexion d'un administrateur (30 par défaut). */
     public static function inactiviteAdmin(): int
     {

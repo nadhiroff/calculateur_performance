@@ -109,6 +109,21 @@
         h1.textContent = rub || h1.dataset.titre; if (sur) sur.textContent = rub ? actif.closest('details').querySelector('summary').textContent.trim() : sur.dataset.titre; }
     }
   }
+  /* Groupes du menu ouverts / fermés : retenus dans la session du serveur (aucun stockage navigateur) et rouverts par
+     index.php à l'actualisation. Seul l'état final est envoyé, et seulement s'il a changé. */
+  (function suivreGroupesMenu() {
+    const groupes = $$('#nav details[data-groupe]'), etat = () => groupes.filter((d) => d.open).map((d) => d.dataset.groupe).join(',');
+    let envoye = etat(), minuteur = null;
+    groupes.forEach((d) => d.addEventListener('toggle', () => {
+      clearTimeout(minuteur);
+      minuteur = setTimeout(() => {
+        const e = etat(); if (e === envoye) return;
+        envoye = e;
+        CT.api.requete('/session/menu', { method: 'POST', json: { groupes: e ? e.split(',') : [] } }).catch(() => { envoye = null; });
+      }, 400);
+    }));
+  })();
+
   function routeHash() {
     const [h, sous] = location.hash.split('/'), nom = HASH[h] || 'dashboard';
     if (sous && SOUS_HASH[nom]) { try { CT.memoire.setItem('ct_onglet_' + nom, sous); } catch (e) { /* stockage indisponible */ } }
