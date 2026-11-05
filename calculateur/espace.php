@@ -334,7 +334,16 @@ $waLien = Contact::whatsappLien($trouve !== null && in_array($etat, ['code', 'cr
     /* Mode « clavier » (téléphone, champ login touché) : présentation et pied masqués, carte en haut de l'écran.
        Le champ reste visible au-dessus du clavier sans que la page ait à défiler ; tout revient quand le clavier se ferme. */
     body.clavier { justify-content: flex-start; padding-top: calc(14px + env(safe-area-inset-top, 0px)); }
-    body.clavier .tete, body.clavier .pied { display: none; }
+    body.clavier .tete { display: none; }
+    /* Clavier ouvert : le bouton WhatsApp reste visible, en version compacte, juste sous la carte */
+    body.clavier .pied small { display: none; }
+    body.clavier .whatsapp { padding: 6px 12px; }
+    body.clavier .whatsapp .logos img, body.clavier .whatsapp .logos i { width: 30px; height: 30px; }
+    body.clavier .whatsapp .logos i { font-size: 1.05rem; }
+    body.clavier .whatsapp b { font-size: .9rem; }
+    @media (max-height: 380px) { body.clavier .carte .sous, body.clavier .carte .astuce { display: none; } body.clavier .carte h2 { margin-bottom: 8px; } }
+    html:has(body.clavier), body.clavier { overflow-y: auto; }   /* très petit écran : la page glisse (barre masquée), le bouton reste atteignable */
+    body.clavier { height: auto; min-height: 100vh; min-height: 100dvh; }
     body.clavier .carte { animation: none; }
     @media (max-height: 540px) { .tete { display: none; } .pied small { display: none; } .whatsapp { padding: 6px 14px; } }
     @media (max-height: 420px) { html, body { overflow: auto; } body { height: auto; min-height: 100dvh; justify-content: flex-start; } }

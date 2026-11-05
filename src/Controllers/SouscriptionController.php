@@ -10,6 +10,7 @@ use App\Http\Response;
 use App\Http\Valider;
 use App\Models\CeltiisData;
 use App\Models\Import;
+use App\Services\PeriodeDefaut;
 use App\Support\ExcelReader;
 
 final class SouscriptionController
@@ -27,13 +28,10 @@ final class SouscriptionController
         $mois = Db::select('SELECT `mois`, COUNT(*) AS nb, MIN(`jour`) AS du, MAX(`jour`) AS au FROM `celtiis_datas` GROUP BY `mois` ORDER BY `mois`');
         $dernier = Import::dernierReussi('souscriptions');
 
-        // Période par défaut = le mois le plus récent présent en base (du 1er à la dernière date en base), quel que soit
-        // le dernier fichier importé : réimporter un fichier plus ancien ne doit pas ramener l'affichage en arrière.
-        $defaut = null;
-        if ($mois) {
-            $derniereLigne = $mois[array_key_last($mois)];
-            $defaut = ['du' => $derniereLigne['mois'].'-01', 'au' => $derniereLigne['au'], 'source' => 'derniere_donnee'];
-        }
+        // Période par défaut = le mois le plus récent qui a au moins un jour ouvré avec des données (PeriodeDefaut), quel que
+        // soit le dernier fichier importé : un mois qui commence par un dimanche seul n'affiche plus un écran vide.
+        $p = $mois ? PeriodeDefaut::calculer() : null;
+        $defaut = $p === null ? null : $p + ['source' => 'derniere_donnee'];
 
         return Response::json([
             'mois' => $mois,
