@@ -485,7 +485,7 @@
     document.addEventListener('keydown', echap);
     voile.querySelector('.ok').focus();
     const conf = voile.querySelector('.confettis');
-    if (conf && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (conf) {   // confettis même avec « réduire les animations » (voir feuArtifice)
       const couleurs = ['#2450D3', '#12A672', '#F2A007', '#E5484D', '#7FA6FF'];
       for (let i = 0; i < 50; i++) { const c = document.createElement('i'); c.style.left = Math.random() * 100 + '%'; c.style.background = couleurs[i % couleurs.length]; c.style.animationDuration = 2.4 + Math.random() * 2 + 's'; c.style.animationDelay = Math.random() * .8 + 's'; conf.appendChild(c); }
     }
@@ -493,9 +493,9 @@
 
   /* Feu d'artifice (canvas, sans bibliothèque) derrière le message d'accueil : fusées qui montent et éclatent en étincelles.
      duree : temps pendant lequel de nouvelles fusées partent ; force : nombre de fusées et d'étincelles (0 à 1).
-     Rien si le téléphone demande moins d'animations. Renvoie la fonction qui arrête tout (fermeture du message). */
+     Affiché aussi quand le téléphone demande moins d'animations (réglage souvent activé tout seul par l'économie de batterie
+     sur Android) : c'est une fête courte, demandée par la direction. Renvoie la fonction qui arrête tout. */
   function feuArtifice(parent, duree, force) {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return () => {};
     const cv = document.createElement('canvas'), ctx = cv.getContext('2d');
     if (!ctx) return () => {};
     cv.className = 'feu'; cv.setAttribute('aria-hidden', 'true'); parent.prepend(cv);

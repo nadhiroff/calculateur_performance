@@ -340,3 +340,8 @@ table.ventes .o-mob { display: none; color: var(--text-3); font-size: .7rem; }
 @media (max-width: 400px) { .annonce .boite { padding: 20px 16px 16px; } .annonce .chiffres b { font-size: 1.15rem; } }
 /* Feu d'artifice derrière le message d'accueil (champion du jour) : n'intercepte aucun clic */
 .annonce .feu { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+/* « Réduire les animations » (souvent activé par l'économie de batterie) coupe toutes les animations de la page : les confettis
+   du champion restent animés (fête courte demandée par la direction). La durée de chaque confetti est réglée par le script. */
+@media (prefers-reduced-motion: reduce) {
+  .annonce .confettis i { animation-name: tomber !important; animation-duration: 3.2s !important; animation-timing-function: linear !important; animation-fill-mode: forwards !important; animation-iteration-count: 1 !important; }
+}
