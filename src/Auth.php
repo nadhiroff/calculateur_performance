@@ -2,6 +2,7 @@
 
 namespace App;
 
+use App\Services\AgentCode;
 use PDOException;
 
 /**
@@ -131,25 +132,56 @@ final class Auth
         return null;
     }
 
-    /* ---------- Espace commercial RGZ : identification par le login seul (pas de mot de passe) ---------- */
+    /* ---------- Espace commercial RGZ : login + code personnel à 4 chiffres (Services\AgentCode) ---------- */
 
-    /** @return array{cle: string, login: string, equipe: string, debut: int, vu: int}|null commercial identifié */
-    public static function agent(): ?array
+    /** Délai (secondes) pour taper le code une fois le login reconnu. */
+    private const ATTENTE_CODE = 600;
+
+    /** Pourquoi la dernière vérification de agent() a fermé la session : « code » (code réinitialisé) ou « expiree ». */
+    private static ?string $raisonAgent = null;
+
+    public static function raisonAgent(): ?string
+    {
+        return self::$raisonAgent;
+    }
+
+    /**
+     * @param bool $prolonger false : simple contrôle (page ouverte qui vérifie sa session toutes les 10 s) ; il ne compte pas
+     *                        comme une activité, sinon un onglet oublié ne serait jamais déconnecté pour inactivité
+     * @return array{cle: string, login: string, equipe: string, code_le: string, debut: int, vu: int}|null commercial identifié
+     */
+    public static function agent(bool $prolonger = true): ?array
     {
         self::demarrer(true);
         $a = $_SESSION['agent'] ?? null;
         if (! is_array($a)) {
+            self::$raisonAgent = $_SESSION['agent_ferme'] ?? null;   // session fermée plus tôt : sa raison reste connue
             return null;
         }
         $maintenant = time();
-        if ($maintenant - $a['vu'] > self::reglage('inactivite_agent_minutes', 240) * 60 || $maintenant - $a['debut'] > self::reglage('duree_max_heures', 12) * 3600) {
+        // Session ouverte avant les codes (login seul) : refusée, le commercial doit passer par son code
+        $expiree = ! isset($a['code_le'])
+            || $maintenant - $a['vu'] > self::reglage('inactivite_agent_minutes', 240) * 60
+            || $maintenant - $a['debut'] > self::reglage('duree_max_heures', 12) * 3600;
+        self::$raisonAgent = $expiree ? 'expiree' : null;
+        if (! $expiree) {
+            // Code réinitialisé par l'administrateur (ou remplacé) depuis l'ouverture : session fermée tout de suite, sur tous
+            // ses appareils (vérifié à CHAQUE requête : une lecture par clé primaire, négligeable)
+            $code = AgentCode::lire($a['cle']);
+            if ($code === null || (string) $code['cree_le'] !== $a['code_le']) {
+                $expiree = true;
+                self::$raisonAgent = 'code';
+            }
+        }
+        if ($expiree) {
             self::demarrer(false, false);   // sans Set-Cookie
             unset($_SESSION['agent']);
+            $_SESSION['agent_ferme'] = self::$raisonAgent;   // jusqu'à la prochaine connexion (message sur la page de connexion)
             session_write_close();
 
             return null;
         }
-        if ($maintenant - $a['vu'] > self::REVERIFICATION) {
+        if ($prolonger && $maintenant - $a['vu'] > self::REVERIFICATION) {
             self::demarrer(false, false);   // sans Set-Cookie
             $_SESSION['agent']['vu'] = $maintenant;
             session_write_close();
@@ -158,16 +190,91 @@ final class Auth
         return $a;
     }
 
-    /** @param array{cle: string, login: string, equipe: string} $infos */
-    public static function connecterAgent(array $infos): void
+    /** Première arrivée dans l'espace depuis la connexion : vrai une seule fois (le message du champion n'est montré qu'une fois). */
+    public static function consommerAccueil(): bool
+    {
+        self::demarrer(true);
+        if (empty($_SESSION['agent']['accueil'])) {
+            return false;
+        }
+        self::demarrer(false, false);   // sans Set-Cookie
+        unset($_SESSION['agent']['accueil']);
+        session_write_close();
+
+        return true;
+    }
+
+    /**
+     * Ouvre la session du commercial, une fois son code vérifié (ou choisi).
+     *
+     * @param array{cle: string, login: string, equipe: string} $infos
+     * @param string $codeLe date de création du code : si l'administrateur le réinitialise, la session se ferme
+     */
+    public static function connecterAgent(array $infos, string $codeLe): void
     {
         self::demarrer();
         session_regenerate_id(true);
         self::$idCourant = session_id();
         $maintenant = time();
-        $_SESSION['agent'] = ['cle' => $infos['cle'], 'login' => $infos['login'], 'equipe' => $infos['equipe'], 'debut' => $maintenant, 'vu' => $maintenant];
+        unset($_SESSION['agent_attente'], $_SESSION['agent_ferme']);
+        // accueil : message du champion du jour de l'équipe, affiché une fois à l'arrivée dans l'espace
+        $_SESSION['agent'] = ['cle' => $infos['cle'], 'login' => $infos['login'], 'equipe' => $infos['equipe'], 'code_le' => $codeLe, 'debut' => $maintenant, 'vu' => $maintenant, 'accueil' => true];
         $_SESSION['csrf'] ??= bin2hex(random_bytes(32));
         session_write_close();
+    }
+
+    /**
+     * Login reconnu, code pas encore tapé : retenu dans la session pendant 10 minutes (étape « code » de espace.php).
+     *
+     * @param array{cle: string, login: string, equipe: string}|null $infos null : oublier
+     */
+    public static function retenirLogin(?array $infos): void
+    {
+        self::demarrer();
+        if ($infos === null) {
+            unset($_SESSION['agent_attente']);
+        } else {
+            $_SESSION['agent_attente'] = ['cle' => $infos['cle'], 'login' => $infos['login'], 'equipe' => $infos['equipe'], 't' => time()];
+        }
+        $_SESSION['csrf'] ??= bin2hex(random_bytes(32));
+        session_write_close();
+    }
+
+    /**
+     * Résultat d'un formulaire de espace.php, gardé le temps de la redirection qui suit l'envoi (POST → 303 → GET) :
+     * actualiser la page ne renvoie plus le formulaire (plus de « Confirmer le nouvel envoi du formulaire »).
+     *
+     * @param array<string, mixed> $donnees
+     */
+    public static function retenirResultat(array $donnees): void
+    {
+        self::demarrer();
+        $_SESSION['espace_resultat'] = $donnees;
+        session_write_close();
+    }
+
+    /** @return array<string, mixed>|null résultat du dernier envoi, lu UNE fois (une 2e actualisation affiche la page normale) */
+    public static function lireResultat(): ?array
+    {
+        self::demarrer(true);
+        if (! isset($_SESSION['espace_resultat'])) {
+            return null;
+        }
+        $r = $_SESSION['espace_resultat'];
+        self::demarrer(false, false);   // sans Set-Cookie
+        unset($_SESSION['espace_resultat']);
+        session_write_close();
+
+        return is_array($r) ? $r : null;
+    }
+
+    /** @return array{cle: string, login: string, equipe: string}|null login reconnu en attente de son code */
+    public static function loginRetenu(): ?array
+    {
+        self::demarrer(true);
+        $a = $_SESSION['agent_attente'] ?? null;
+
+        return is_array($a) && time() - (int) $a['t'] <= self::ATTENTE_CODE ? ['cle' => $a['cle'], 'login' => $a['login'], 'equipe' => $a['equipe']] : null;
     }
 
     /** Saisies de login inconnues depuis cette IP : au-delà de 15 en 15 minutes, l'identification est suspendue. */
@@ -301,10 +408,10 @@ final class Auth
             return;
         }
         session_name(self::COOKIE);
+        ini_set('session.use_cookies', '1');   // avant les paramètres du cookie : une lecture précédente de la requête a pu le couper
         session_set_cookie_params(['lifetime' => 0, 'path' => '/', 'secure' => self::https(), 'httponly' => true, 'samesite' => 'Lax']);
         ini_set('session.use_strict_mode', '1');
         ini_set('session.use_only_cookies', '1');
-        ini_set('session.use_cookies', '1');
         ini_set('session.gc_maxlifetime', (string) (self::reglage('duree_max_heures', 12) * 3600));
         self::dossierSessions();
 

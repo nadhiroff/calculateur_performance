@@ -132,8 +132,106 @@ final class AgentTableau
                 return ['jour' => $j, 'ventes' => $t];
             }, self::jours($debutMois, $au)),
         ];
+        $tableau['champion_equipe'] = self::championEquipe($equipeNom, $agents, $parJour, $cleAgent, $debutMois, $au, $estOuvre, $c['champions']);
+        $tableau['mois_precedent'] = self::moisPrecedent($cleAgent, $debutMois, $au);
 
         return $tableau;
+    }
+
+    /**
+     * Champion du jour de l'ÉQUIPE : même règle que le champion RGZ du jour, entre les membres de l'équipe seulement.
+     * Parmi ceux qui ont atteint leur objectif du jour (et ont droit aux primes), meilleur pourcentage de l'objectif du jour ;
+     * à égalité, le plus de ventes. Jour annoncé : dernier jour ouvré du mois (≤ date de fin) où RGZ a des ventes.
+     * Tableau d'honneur : nombre de titres de chaque membre depuis le 1er du mois. Aucun montant, aucune vente détaillée.
+     *
+     * @param  array<string, array<string, mixed>>  $agents
+     * @param  array<string, array<string, array{0: int, 1: int}>>  $parJour
+     * @param  array<string, string>  $championsRgz  jour → clé du champion RGZ
+     * @return array<string, mixed>
+     */
+    private static function championEquipe(?string $equipe, array $agents, array $parJour, string $cle, string $debutMois, string $au, callable $estOuvre, array $championsRgz): array
+    {
+        $membres = $equipe === null ? [] : array_filter($agents, static fn (array $a) => $a['equipe'] === $equipe);
+        $jours = array_values(array_filter(self::jours($debutMois, $au), $estOuvre));
+        $titres = [];
+        $parJourChampion = [];
+        foreach ($jours as $j) {
+            $meilleur = null;
+            foreach ($membres as $k => $a) {
+                $v = $parJour[$k][$j][0] ?? 0;
+                if ($a['primes'] && $a['objJour'] > 0 && $v + 1e-9 >= $a['objJour']) {
+                    $ratio = $v / $a['objJour'];
+                    if ($meilleur === null || $ratio > $meilleur[1] + 1e-9 || (abs($ratio - $meilleur[1]) < 1e-9 && $v > $meilleur[2])) {
+                        $meilleur = [(string) $k, $ratio, $v];
+                    }
+                }
+            }
+            if ($meilleur !== null) {
+                $titres[$meilleur[0]] = ($titres[$meilleur[0]] ?? 0) + 1;
+                $parJourChampion[$j] = $meilleur;
+            }
+        }
+
+        $jour = null;
+        foreach (array_reverse($jours) as $j) {
+            foreach ($parJour as $ventes) {
+                if (($ventes[$j][0] ?? 0) > 0) {
+                    $jour = $j;
+                    break 2;
+                }
+            }
+        }
+
+        $moi = $agents[$cle] ?? null;
+        $annonce = null;
+        if ($jour !== null && $membres) {
+            $ch = $parJourChampion[$jour] ?? null;
+            $annonce = [
+                'jour' => $jour,
+                'champion' => $ch === null ? null : [
+                    'login' => $agents[$ch[0]]['login'], 'ventes' => $ch[2], 'objectif' => round($agents[$ch[0]]['objJour'], 2),
+                    'taux' => round($ch[1], 4), 'moi' => $ch[0] === $cle, 'aussi_rgz' => ($championsRgz[$jour] ?? null) === $ch[0],
+                ],
+                'moi' => ['ventes' => $parJour[$cle][$jour][0] ?? 0, 'objectif' => $moi && $moi['objJour'] > 0 ? round($moi['objJour'], 2) : null],
+            ];
+        }
+        $honneur = [];
+        foreach ($membres as $k => $a) {
+            $honneur[] = ['login' => $a['login'], 'titres' => $titres[$k] ?? 0, 'moi' => (string) $k === $cle];
+        }
+        usort($honneur, static fn (array $x, array $y) => [$y['titres'], $x['login']] <=> [$x['titres'], $y['login']]);
+
+        return ['annonce' => $annonce, 'honneur' => $honneur, 'mes_titres' => $titres[$cle] ?? 0, 'jours_ouvres' => count($jours)];
+    }
+
+    /**
+     * Mes ventes du mois précédent : du 1er au même jour (comparaison à date égale) et sur le mois entier.
+     * null si la base n'a aucune vente ce mois-là (rien à comparer). Comptées avec les règles DE CE MOIS-LÀ (Paramètres :
+     * statuts et offres comptés), exactement comme le reste de l'application les compte pour ce mois.
+     *
+     * @return array<string, mixed>|null
+     */
+    private static function moisPrecedent(string $cle, string $debutMois, string $au): ?array
+    {
+        $debut = date('Y-m-01', (int) strtotime($debutMois.' -1 month'));
+        $fin = date('Y-m-t', (int) strtotime($debut));
+        if (Db::value('SELECT 1 FROM `celtiis_datas` WHERE `jour` BETWEEN ? AND ? LIMIT 1', [$debut, $fin]) === null) {
+            return null;
+        }
+        $R = self::parametres(substr($debut, 0, 7))['regles'];
+        $statuts = array_values(array_map('strval', $R['statuts_comptes'] ?? ['OK']));
+        $offreOk = OffresComptees::filtre($R);
+        $valeurB2B = mb_strtoupper((string) ($R['segment_b2b']['valeur'] ?? 'ORGANISATION'));
+        $memeJour = min($fin, substr($debut, 0, 8).substr($au, 8, 2));
+        $a = $total = 0;
+        foreach (self::ventesParJour([$cle], $debut, $fin, $statuts, $offreOk, $valeurB2B)[$cle] ?? [] as $j => $v) {
+            $total += $v[0];
+            if ($j <= $memeJour) {
+                $a += $v[0];
+            }
+        }
+
+        return ['mois' => substr($debut, 0, 7), 'jusquau' => $memeJour, 'ventes_a_date' => $a, 'ventes_mois' => $total];
     }
 
     /**

@@ -7,6 +7,7 @@
 */
 
 use App\Auth;
+use App\Support\Contact;
 use App\Support\LoginKey;
 
 require dirname(__DIR__).'/vendor/autoload.php';
@@ -18,10 +19,13 @@ header('X-Content-Type-Options: nosniff');
 $agent = Auth::agent();
 $apercu = $agent === null && Auth::admin() !== null && ! empty($_GET['login']) ? LoginKey::from((string) $_GET['login']) : null;
 if ($agent === null && $apercu === null) {
-    header('Location: espace.php', true, 302);
+    // Code réinitialisé ou session expirée : la page de connexion dit pourquoi
+    $raison = Auth::raisonAgent();
+    header('Location: espace.php'.($raison === 'code' ? '?reinit=1' : ($raison === 'expiree' ? '?expiree=1' : '')), true, 302);
     exit;
 }
 $jeton = Auth::jeton();
+$accueil = $agent !== null && Auth::consommerAccueil();   // message du champion de l'équipe : une fois par connexion
 $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
 ?>
 <!DOCTYPE html>
@@ -40,7 +44,7 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous">
   <link rel="stylesheet" href="assets/css/design-system.css?v=20261021-15">
-  <link rel="stylesheet" href="assets/css/mon-espace.css?v=20261022-11">
+  <link rel="stylesheet" href="assets/css/mon-espace.css?v=20261105-c4">
 </head>
 <body>
   <div class="coque">
@@ -51,11 +55,35 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
         <span class="avatar" aria-hidden="true"><i class="fa-solid fa-user"></i></span>
         <span><b id="qui-login"><?= $h($agent['login'] ?? $apercu) ?></b><small><i class="fa-solid fa-people-group" aria-hidden="true"></i> Équipe <span id="qui-equipe"><?= $h($agent['equipe'] ?? '…') ?></span></small></span>
       </div>
-      <a href="#accueil" data-vue="accueil"><i class="fa-solid fa-gauge-high" aria-hidden="true"></i>Tableau de bord</a>
-      <a href="#ventes" data-vue="ventes"><i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>Mes ventes</a>
-      <a href="#equipe" data-vue="equipe"><i class="fa-solid fa-people-group" aria-hidden="true"></i>Mon équipe</a>
-      <a href="#primes" data-vue="primes"><i class="fa-solid fa-trophy" aria-hidden="true"></i>Primes &amp; défis</a>
+      <!-- Menu en groupes (comme la partie administrateur) : chaque sous-menu ouvre sa propre page -->
+      <div class="menu-liens">
+        <a href="#accueil" data-vue="accueil"><i class="fa-solid fa-gauge-high" aria-hidden="true"></i>Tableau de bord</a>
+        <details class="menu-groupe" data-groupe="resultats">
+          <summary><i class="fa-solid fa-chart-simple" aria-hidden="true"></i>Mes résultats</summary>
+          <a href="#mon-mois" data-vue="mon-mois"><i class="fa-solid fa-calendar-check" aria-hidden="true"></i>Mon mois jour par jour</a>
+          <a href="#ventes" data-vue="ventes"><i class="fa-solid fa-chart-pie" aria-hidden="true"></i>Ventes B2C / B2B</a>
+          <a href="#detail" data-vue="detail"><i class="fa-solid fa-list-check" aria-hidden="true"></i>Détail de mes ventes</a>
+        </details>
+        <details class="menu-groupe" data-groupe="equipe">
+          <summary><i class="fa-solid fa-people-group" aria-hidden="true"></i>Mon équipe</summary>
+          <a href="#equipe" data-vue="equipe"><i class="fa-solid fa-ranking-star" aria-hidden="true"></i>Classement de l'équipe</a>
+          <a href="#equipe-evolution" data-vue="equipe-evolution"><i class="fa-solid fa-chart-line" aria-hidden="true"></i>Évolution de l'équipe</a>
+          <a href="#equipes" data-vue="equipes"><i class="fa-solid fa-flag" aria-hidden="true"></i>Classement des équipes</a>
+          <a href="#champion" data-vue="champion"><i class="fa-solid fa-crown" aria-hidden="true"></i>Champion du jour</a>
+        </details>
+        <details class="menu-groupe" data-groupe="primes">
+          <summary><i class="fa-solid fa-trophy" aria-hidden="true"></i>Primes &amp; défis</summary>
+          <a href="#primes" data-vue="primes"><i class="fa-solid fa-coins" aria-hidden="true"></i>Mes primes</a>
+          <a href="#paliers" data-vue="paliers"><i class="fa-solid fa-stairs" aria-hidden="true"></i>Paliers</a>
+          <a href="#projection" data-vue="projection"><i class="fa-solid fa-rocket" aria-hidden="true"></i>Projection fin de mois</a>
+          <a href="#badges" data-vue="badges"><i class="fa-solid fa-award" aria-hidden="true"></i>Mes badges</a>
+        </details>
+      </div>
       <div class="menu-pied">
+        <a class="aide-wa" href="<?= $h(Contact::whatsappLien('Bonjour, je suis '.($agent['login'] ?? 'commercial RGZ').' (espace commercial RGZ). ')) ?>" target="_blank" rel="noopener" aria-label="Demander de l'aide sur WhatsApp">
+          <span class="logos" aria-hidden="true"><img src="assets/img/logoRGZ-64.png" alt="" width="30" height="30"><i class="fa-brands fa-whatsapp"></i></span>
+          <span><small>Une question, un souci ?</small><b>Aide sur WhatsApp</b></span>
+        </a>
         <?php if ($agent !== null): ?>
           <form method="post" action="deconnexion.php" id="form-sortie">
             <input type="hidden" name="csrf" value="<?= $h($jeton) ?>"><input type="hidden" name="vers" value="espace">
@@ -80,7 +108,7 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
         </form>
       </header>
 
-      <main id="contenu" class="contenu" data-login="<?= $h($apercu ?? '') ?>" aria-busy="true" aria-live="polite">
+      <main id="contenu" class="contenu" data-login="<?= $h($apercu ?? '') ?>" data-accueil="<?= $accueil ? '1' : '' ?>" aria-busy="true" aria-live="polite">
         <div class="chargement"><span class="roue" aria-hidden="true"></span>Chargement de vos résultats…</div>
       </main>
     </div>
@@ -93,6 +121,6 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
   </dialog>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer crossorigin="anonymous"></script>
-  <script src="assets/js/mon-espace.js?v=20261023-m1" defer></script>
+  <script src="assets/js/mon-espace.js?v=20261105-c4" defer></script>
 </body>
 </html>

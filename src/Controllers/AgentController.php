@@ -15,6 +15,12 @@ use App\Support\LoginKey;
 /** Espace commercial RGZ (calculateur/mon-espace.php). */
 final class AgentController
 {
+    /** GET /api/agent/session : session toujours valide (le contrôle d'accès de l'API a déjà vérifié le code) ; 401 sinon. */
+    public function session(): Response
+    {
+        return Response::json(['ok' => true]);
+    }
+
     /**
      * GET /api/agent/tableau[?du=AAAA-MM-JJ&au=AAAA-MM-JJ]
      * Commercial identifié : SES résultats et ceux de SON équipe. Administrateur : aperçu de n'importe quel login (?login=).
@@ -39,8 +45,9 @@ final class AgentController
             throw HttpException::validation('du', 'Période trop longue : '.AgentTableau::PERIODE_MAX.' jours au maximum.');
         }
 
-        // Tableau complet du commercial gardé 10 min (renouvelé à chaque import) : un rechargement de page ne recalcule rien
-        $tableau = Cache::memoriser('agent-v4:'.$cle.':'.$du.':'.$au.':'.Cache::version(), 600, static fn () => (new AgentTableau())->calculer($cle, $du, $au));
+        // Tableau complet du commercial gardé 10 min (renouvelé à chaque import) : un rechargement de page ne recalcule rien.
+        // v6 : champion de l'équipe, mois précédent compté avec ses propres règles (anciennes réponses en cache ignorées)
+        $tableau = Cache::memoriser('agent-v6:'.$cle.':'.$du.':'.$au.':'.Cache::version(), 600, static fn () => (new AgentTableau())->calculer($cle, $du, $au));
 
         return Response::json($tableau + [
             'donnees' => ['du' => $bornes['du'] ?? null, 'au' => $dernier],

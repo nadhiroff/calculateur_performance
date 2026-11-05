@@ -18,6 +18,7 @@ use App\Controllers\RegleController;
 use App\Controllers\SessionController;
 use App\Controllers\SouscriptionController;
 use App\Controllers\SyntheseController;
+use App\Controllers\UtilisateurController;
 use App\Http\HttpException;
 use App\Http\Request;
 use App\Http\Response;
@@ -68,6 +69,11 @@ $routes = [
 
     // Espace commercial RGZ : ses résultats et ceux de son équipe (commercial identifié ou administrateur)
     ['GET', 'agent/tableau', [AgentController::class, 'tableau']],
+    ['GET', 'agent/session', [AgentController::class, 'session']],   // contrôle toutes les 10 s par la page ouverte
+
+    // Paramètres › Utilisateurs : codes à 4 chiffres des commerciaux (administrateurs seulement)
+    ['GET', 'utilisateurs', [UtilisateurController::class, 'index']],
+    ['POST', 'utilisateurs/reinitialiser', [UtilisateurController::class, 'reinitialiser']],
 ];
 
 /** Trouve la route ; renvoie [action, paramètres] ou une réponse 404 / 405. */
@@ -123,9 +129,10 @@ $request = Request::capturer();
 
 try {
     $routeAgent = str_starts_with($request->chemin, 'agent/');
-    if (Auth::admin() === null && ! ($routeAgent && Auth::agent() !== null)) {
+    if (Auth::admin() === null && ! ($routeAgent && Auth::agent($request->chemin !== 'agent/session') !== null)) {
         // API réservée aux administrateurs connectés (calculateur/connexion.php) ; routes « agent/ » : aussi aux commerciaux (calculateur/espace.php)
-        $reponse = Response::json(['message' => 'Session expirée ou absente : reconnectez-vous.'], 401);
+        // raison « code » : code du commercial réinitialisé par l'administrateur (sa page affiche alors le bon message)
+        $reponse = Response::json(['message' => 'Session expirée ou absente : reconnectez-vous.', 'raison' => Auth::raisonAgent()], 401);
     } elseif (! in_array($request->methode, ['GET', 'HEAD'], true) && Auth::origineEtrangere()) {
         $reponse = Response::json(['message' => 'Requête refusée : elle ne provient pas de l\'application.'], 403);
     } elseif ($request->methode === 'POST' && $tropVolumineux()) {

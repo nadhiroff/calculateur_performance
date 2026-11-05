@@ -153,7 +153,7 @@ CREATE TABLE IF NOT EXISTS `connexions_echouees` (
   KEY `connexions_echouees_ip_index` (`ip`, `created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Facturation Celtiis : lignes des fichiers « POINT VENTES » reçus en fin de mois (Facturation › Tableau de bord › Importer).
+-- Facturation Celtiis : lignes des fichiers « POINT VENTES » reçus en fin de mois (Facturation › Résumé › Importer).
 -- Seules les feuilles « Liste (des) clients » et « Liste des arriérés » sont lues (repérées par leur nom puis par leurs colonnes).
 --   source = type de la FEUILLE lue (clients | arrieres) : réimporter un fichier remplace, pour son mois, les lignes des mêmes
 --            types de feuilles (un fichier d'arriérés envoyé à part ne supprime pas la liste des clients, et inversement) ;
@@ -204,4 +204,27 @@ CREATE TABLE IF NOT EXISTS `factures_objectifs` (
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`mois`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Espace commercial RGZ : code personnel à 4 chiffres choisi par le commercial à sa première connexion (login + code ensuite).
+-- Seule l'empreinte (password_hash) est gardée. Code oublié : Paramètres › Utilisateurs › « Réinitialiser » supprime la ligne ;
+-- le commercial choisit un nouveau code à sa connexion suivante. Ses sessions ouvertes sont fermées dans la minute.
+CREATE TABLE IF NOT EXISTS `agents_codes` (
+  `cle` varchar(120) NOT NULL,
+  `login` varchar(120) NOT NULL,
+  `code` varchar(255) NOT NULL,
+  `cree_le` timestamp NULL DEFAULT NULL,
+  `cree_ip` varchar(45) DEFAULT NULL,
+  `derniere_connexion` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`cle`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Historique des réinitialisations de code (qui, quand, pour quel login) : affiché dans Paramètres › Utilisateurs.
+CREATE TABLE IF NOT EXISTS `agents_codes_reinit` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `cle` varchar(120) NOT NULL,
+  `admin` varchar(190) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `agents_codes_reinit_cle_index` (`cle`, `created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

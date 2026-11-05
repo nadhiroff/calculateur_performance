@@ -412,3 +412,7 @@ details.comparatif[open] > summary { margin-bottom: var(--sp-4); }
 .objectif-op { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--sp-3) var(--sp-4); }
 .objectif-op .input { width: 160px; }
 .objectif-op p { flex: 1 1 280px; }
+
+/* Paramètres : ni dates, ni période, ni export, ni résumé des filtres (ils ne s'y appliquent pas). Règle CSS plutôt que script :
+   les barres restent cachées même quand le chargement des données (app.js, facturation.js) les réaffiche en arrière-plan. */
+body:has(#view-parametres.active) :is(#global-date-filters, #fact-periode, #sharebar, #filter-status) { display: none !important; }

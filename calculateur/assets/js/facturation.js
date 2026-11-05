@@ -2,7 +2,7 @@
    facturation.js — pages « Challenge » et « Facturation Celtiis » du tableau de bord interne :
    Challenge login / équipe · Facturation B2C · Facturation B2B · Point financier par login · Reports.
    Les calculs sont dans facturation_calc.js (testés : node tests/facturation.test.js).
-   Source de la facture : fichiers « POINT VENTES » de fin de mois importés dans Facturation › Tableau de bord (table factures_lignes) ;
+   Source de la facture : fichiers « POINT VENTES » de fin de mois importés dans Facturation › Résumé (table factures_lignes) ;
    seules les lignes « A PAYER » et les arriérés sont facturés. Les Challenges utilisent les souscriptions du Tableau de bord.
    ========================================================================== */
 (function () {
@@ -11,7 +11,7 @@
   const creer = (o) => CT.table.creer(o).el;   // CT.table.creer renvoie {el, maj}
   const mn = (n) => CT.fmt.int(n), fc = (n) => CT.fmt.fcfa(n), esc = CT.esc;
 
-  const VUES = { challogin: 'Challenge login', chalequipe: 'Challenge équipe', factb2c: 'Facturation B2C', factb2b: 'Facturation B2B', finance: 'Point financier par login', reports: 'Reports', factdash: 'Tableau de bord des factures', factevo: 'Évolution de la facturation', factperf: 'Performance agents', factreco: 'Recommandations' };
+  const VUES = { challogin: 'Challenge login', chalequipe: 'Challenge équipe', factb2c: 'Facturation B2C', factb2b: 'Facturation B2B', finance: 'Point financier par login', reports: 'Reports', factdash: 'Résumé de la facturation', factevo: 'Évolution de la facturation', factperf: 'Performance agents', factreco: 'Recommandations' };
   const S = CT.factEtat = { b2c: null, b2b: null, pas: 'semaine', params: {}, c2c: null, c2b: null, pf: null, mois: null, moisDispo: null, cache: new Map(), choix: null, historique: null };
 
   /* ---------- Lecture des fichiers ---------- */
@@ -252,7 +252,7 @@
         return `<li><span class="ic ${cls}" aria-hidden="true"><i class="fa-solid ${ic}"></i></span><div><div class="nm" title="${esc(i.nom)}">${esc(i.nom)}</div><small title="${esc(det + (i.feuilles && i.feuilles.length ? ' · feuilles : ' + i.feuilles.join(', ') : ''))}">${esc(det)}</small></div><div style="text-align:right"><span class="badge ${badge}">${txt}</span><small>${i.date ? depuis(i.date) : ''}</small></div></li>`; }).join('') || '<li class="muted">Aucun fichier importé.</li>'}</ul></section>`;
   }
 
-  /* ---------- Import des fichiers « POINT VENTES » (bouton du Tableau de bord des factures, plusieurs fichiers possibles) ---------- */
+  /* ---------- Import des fichiers « POINT VENTES » (bouton du Résumé de la facturation, plusieurs fichiers possibles) ---------- */
   /* Fenêtre « Contrôle avant import » (même présentation que le Tableau de bord général) : chiffres du fichier et, si le mois
      est déjà en base, ce qui va changer. Renvoie true seulement si l'utilisateur confirme ; rien n'est écrit avant. */
   function controleAvantImport(a) {
@@ -301,7 +301,7 @@
     if (bilan.length) CT.toast(bilan.join(' · '), 'ok', 12000);
     oublier(); if (dernier) choisirMois('m:' + dernier); else rendre();
   }
-  /** Carte « Fichier de facture » en tête du Tableau de bord des factures (même présentation que le Tableau de bord général). */
+  /** Carte « Fichier de facture » en tête du Résumé de la facturation (même présentation que le Tableau de bord général). */
   function carteImport() {
     const L = S.moisDispo || [], choix = '', sel = L.filter((x) => (S.moisSel || [S.mois]).includes(x.mois));
     // Un mois : son fichier ; plusieurs mois : totaux additionnés et nombre de fichiers
@@ -332,7 +332,7 @@
     const d = S[seg], n = (p) => (d ? d.lignes.filter((l) => l.paiement === p).length : 0);
     const arr = d ? d.lignes.filter((l) => l.liste === 'arrieres' && (l.paiement === 'PAYE' || l.paiement === 'REPORT_PAYE')).length : 0;
     return `<section class="card no-print fact-source"><div class="card-head"><div><h3>${S.multi ? 'Fichiers de ' + esc(libSelection(S.moisSel)) : 'Fichier de ' + (S.mois ? esc(CT.date.libelleMois(S.mois)) : '—')}${d ? ' · ' + esc(d.fichier) : ''}</h3>
-      <p>Facture calculée depuis le fichier « POINT VENTES » importé dans <a class="lien-nu" href="#facturation">Facturation › Tableau de bord</a> (feuilles « Liste des clients » et « Liste des arriérés »). Lignes <b>A PAYER</b> + <b>arriérés</b> = facturées ; <b>PAIEMENT REPORTE</b> = reportées ; <b>VENTE NON VALIDEE</b> = non facturées.</p></div></div>
+      <p>Facture calculée depuis le fichier « POINT VENTES » importé dans <a class="lien-nu" href="#facturation">Facturation › Résumé</a> (feuilles « Liste des clients » et « Liste des arriérés »). Lignes <b>A PAYER</b> + <b>arriérés</b> = facturées ; <b>PAIEMENT REPORTE</b> = reportées ; <b>VENTE NON VALIDEE</b> = non facturées.</p></div></div>
       <p class="muted">${seg.toUpperCase()} : ${mn(n('PAYE') + n('REPORT_PAYE') - arr)} à payer · ${mn(arr)} arriéré(s) · ${mn(n('REPORTE'))} reportée(s) · ${mn(n('NON_VALIDE'))} non validée(s)</p></section>`;
   }
   const sansFichier = (texte) => texte;
@@ -400,7 +400,7 @@
   function vueB2C() {
     const root = $('#factb2c-content'), c = S.c2c;
     const imp = zoneBase('b2c');
-    if (!c) { root.innerHTML = imp + vide('b2c', sansFichier('Aucune vente FTTH Home à facturer. Importez le fichier « POINT VENTES » du mois dans Facturation › Tableau de bord.')); return; }
+    if (!c) { root.innerHTML = imp + vide('b2c', sansFichier('Aucune vente FTTH Home à facturer. Importez le fichier « POINT VENTES » du mois dans Facturation › Résumé.')); return; }
     const params = '';
     root.innerHTML = imp + `<div class="stack">${alertes(c.alertes)}
       ${tuiles([
@@ -458,7 +458,7 @@
   function vueFinance() {
     const root = $('#finance-content'), p = S.pf;
     const note = (S.b2c ? '' : '<li>Aucune vente B2C (FTTH Home) dans le fichier de ce mois.</li>') + (S.b2b ? '' : '<li>Aucune vente B2B (FTTH_PRO, FIBRE…) dans le fichier de ce mois.</li>');
-    if (!p) { root.innerHTML = vide('', sansFichier('Aucune facture pour le moment. Importez le fichier « POINT VENTES » du mois dans Facturation › Tableau de bord.')) + `<p class="muted"><a class="lien-nu" href="#facturation-b2c">Aller à la facturation B2C</a> · <a class="lien-nu" href="#facturation-b2b">Aller à la facturation B2B</a></p>`; return; }
+    if (!p) { root.innerHTML = vide('', sansFichier('Aucune facture pour le moment. Importez le fichier « POINT VENTES » du mois dans Facturation › Résumé.')) + `<p class="muted"><a class="lien-nu" href="#facturation-b2c">Aller à la facturation B2C</a> · <a class="lien-nu" href="#facturation-b2b">Aller à la facturation B2B</a></p>`; return; }
     const t = p.totaux;
     root.innerHTML = `<div class="stack">${note ? `<ul class="muted">${note}</ul>` : ''}
       ${tuiles([
@@ -494,7 +494,7 @@
   function vueReports() {
     const root = $('#reports-content');
     const L = (S.b2c ? S.b2c.lignes : []).concat(S.b2b ? S.b2b.lignes : []);
-    if (!L.length) { root.innerHTML = vide('', sansFichier('Aucune facture pour le moment. Importez le fichier « POINT VENTES » du mois dans Facturation › Tableau de bord.')); return; }
+    if (!L.length) { root.innerHTML = vide('', sansFichier('Aucune facture pour le moment. Importez le fichier « POINT VENTES » du mois dans Facturation › Résumé.')); return; }
     const par = F.reports(L, S.pas), logins = F.reportsParLogin(L);
     const tot = par.reduce((s, r) => ({ r: s.r + r.reportes, p: s.p + r.payes }), { r: 0, p: 0 });
     root.innerHTML = `<div class="stack">
@@ -631,7 +631,7 @@
     const root = $('#factevo-content');
     root.innerHTML = '<div class="card empty" aria-busy="true"><i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i><h3>Calcul en cours…</h3></div>';
     let liste; try { liste = await listeMois(); } catch (er) { root.innerHTML = vide2('Lecture impossible : ' + esc(er.message)); return; }
-    if (!liste.length) { root.innerHTML = vide2('Importez le fichier « POINT VENTES » du mois dans Facturation › Tableau de bord.'); return; }
+    if (!liste.length) { root.innerHTML = vide2('Importez le fichier « POINT VENTES » du mois dans Facturation › Résumé.'); return; }
     const A = CT.analyse, AC = CT.analyseCalc, pr = CT.etat.prioritaire;
     const lignes = await Promise.all(liste.filter((x) => !S.multi || S.moisSel.includes(x.mois)).map(async (x) => {
       const c = x.mois, L = convertir(await lignesMois(c), c);
@@ -782,7 +782,7 @@
   }
   function feuillesDash() {
     const r = synthese(S.c2c, S.c2b), pr = CT.etat.prioritaire;
-    return [{ nom: 'Tableau de bord factures', cols: [44, 22], total: false, aoa: [['Indicateur', 'Valeur'], ['Période', moisFact()], ['Total à facturer TTC (FCFA)', r.ttc], ['Total HT (FCFA)', r.ht], ['TVA 18 % (FCFA)', r.tva],
+    return [{ nom: 'Résumé factures', cols: [44, 22], total: false, aoa: [['Indicateur', 'Valeur'], ['Période', moisFact()], ['Total à facturer TTC (FCFA)', r.ttc], ['Total HT (FCFA)', r.ht], ['TVA 18 % (FCFA)', r.tva],
         ['Facture B2C HT (FCFA)', r.htB2C], ['Ventes B2C facturées', r.ventesB2C], ['Facture B2B HT (FCFA)', r.htB2B], ['Ventes B2B facturées', r.ventesB2B], ['Ventes reportées (non facturées)', r.reportes],
         ['Net ' + pr + ' (FCFA)', r.netRgz], ['Reversé aux vendeurs (FCFA)', r.vendeurs]] },
       { nom: 'Rémunération nette', cols: [50, 18, 18], total: false, aoa: [['Rubrique', 'Net ' + pr + ' (FCFA)', 'Vendeurs (FCFA)'], ['Part ' + pr + ' des commissions B2C', r.partRgzB2C, ''], ['Part ' + pr + ' des commissions B2B', r.partRgzB2B, ''],
@@ -814,7 +814,7 @@
     const L = S.reco || [];
     return [{ nom: 'Recommandations', cols: [70, 22, 110], total: false, aoa: [['Levier', 'Gain potentiel HT (FCFA)', 'Détail']].concat(L.map((x) => [x.titre, x.gain || 0, x.detail]), [['TOTAL', CT.somme(L, (x) => x.gain || 0), '']]) }];
   }
-  const MODULES = { factdash: ['Tableau de bord des factures', feuillesDash], factb2b: ['Facture B2B', feuillesB2B], factb2c: ['Facture B2C', feuillesB2C], factevo: ['Évolution de la facturation', feuillesEvo],
+  const MODULES = { factdash: ['Résumé de la facturation', feuillesDash], factb2b: ['Facture B2B', feuillesB2B], factb2c: ['Facture B2C', feuillesB2C], factevo: ['Évolution de la facturation', feuillesEvo],
     factperf: ['Performance agents', feuillesPerf], factreco: ['Recommandations', feuillesReco], finance: ['Point financier par login', feuillesFinance], reports: ['Reports', feuillesReports],
     challogin: ['Challenge login', () => (S.chDef ? [S.chDef] : [])], chalequipe: ['Challenge équipe', () => (S.chDef ? [S.chDef] : [])] };
   /** Module d'export de la page affichée : { titre, nom, feuilles(), resume() } — utilisé par la barre (partage.js) */

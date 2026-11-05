@@ -26,8 +26,28 @@ button { font: inherit; }
 .menu a:hover { background: var(--side-hover); color: #fff; }
 .menu a.actif { background: var(--side-active); color: #fff; box-shadow: inset 3px 0 0 #FFD27A; }
 .menu a.actif i { color: #FFD27A; }
+/* Groupes du menu (Mes résultats, Mon équipe, Primes & défis) : un seul ouvert à la fois, celui de la page affichée */
+.menu-liens { display: flex; flex-direction: column; gap: 2px; }
+.menu-groupe summary { display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 10px; color: var(--side-text); font-weight: 600; font-size: .875rem; cursor: pointer; list-style: none; transition: background var(--t-fast), color var(--t-fast); }
+.menu-groupe summary::-webkit-details-marker { display: none; }
+.menu-groupe summary i { width: 18px; text-align: center; color: var(--side-muted); }
+.menu-groupe summary::after { content: '\f078'; font-family: 'Font Awesome 6 Free'; font-weight: 900; font-size: .65rem; margin-left: auto; color: var(--side-muted); transition: transform var(--t-fast); }
+.menu-groupe[open] summary::after { transform: rotate(180deg); }
+.menu-groupe summary:hover { background: var(--side-hover); color: #fff; }
+.menu-groupe summary:focus-visible { outline: 2px solid #FFD27A; outline-offset: -2px; }
+.menu-groupe.contient-actif > summary { color: #fff; }
+.menu-groupe.contient-actif > summary i { color: #FFD27A; }
+.menu-groupe a { padding: 9px 12px 9px 22px; margin-left: 8px; font-size: .8125rem; border-left: 1px solid var(--side-border); border-radius: 0 10px 10px 0; }
+.menu-groupe a i { width: 16px; font-size: .8rem; }
 .menu-pied { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--side-border); }
 .menu-pied form { margin: 0; }
+.menu a.aide-wa { gap: 10px; padding: 9px 10px; margin-bottom: 8px; border: 1px solid var(--side-border); background: rgba(37,211,102,.08); }
+.menu a.aide-wa:hover { background: rgba(37,211,102,.16); }
+.aide-wa .logos { display: flex; align-items: center; flex: none; }
+.aide-wa .logos img { width: 30px; height: 30px; border-radius: 8px; background: #fff; }
+.menu a.aide-wa .logos i { width: 30px; height: 30px; margin-left: -6px; border-radius: 50%; display: grid; place-items: center; background: #25D366; color: #fff; font-size: 1.05rem; border: 2px solid var(--side-bg); }
+.aide-wa small { display: block; font-size: .7rem; color: var(--side-muted); font-weight: 500; }
+.aide-wa b { display: block; color: #fff; font-size: .875rem; white-space: nowrap; }
 .sortie { width: 100%; display: flex; align-items: center; gap: 10px; padding: 11px 12px; border-radius: 10px; border: 0; background: transparent; color: var(--side-muted); cursor: pointer; font-weight: 600; }
 .sortie:hover { background: rgba(229,72,77,.16); color: #FF9A9D; }
 .apercu-admin { display: block; padding: 10px; border-radius: 10px; background: rgba(242,160,7,.15); color: #FFD27A; font-size: .78rem; font-weight: 600; }
@@ -90,6 +110,10 @@ button { font: inherit; }
 .etiquette.pos { background: rgba(94,224,176,.18); color: #8FF0CB; } .etiquette.neg { background: rgba(255,154,157,.18); color: #FFC2C4; } .etiquette.neutre { background: rgba(255,255,255,.12); color: #fff; }
 
 /* Défi du jour */
+/* Grand chiffre de carte (ventes à faire, ventes du jour…) ; les cartes « défi » le colorent en ambre */
+.carte .gros { font-family: var(--font-title); font-size: 2.6rem; font-weight: 800; color: var(--text); line-height: 1; }
+.carte .gros small { font-size: .9rem; color: var(--text-2); font-weight: 600; }
+.carte .centre-v.gauche p { font-size: .82rem; color: var(--text-2); line-height: 1.5; }
 .defi { background: linear-gradient(150deg, #FFF7E6, var(--surface) 70%); border-color: #F7D9A0; }
 .defi .gros { font-family: var(--font-title); font-size: 2.6rem; font-weight: 800; color: #B45309; line-height: 1; }
 .defi .gros small { font-size: .9rem; color: var(--text-2); font-weight: 600; }
@@ -273,3 +297,41 @@ table.ventes .o-mob { display: none; color: var(--text-3); font-size: .7rem; }
   .reinit { grid-column: 1 / -1; justify-content: center; }
   .reinit span { display: inline; }
 }
+/* Étapes numérotées (Champion du jour › comment le devenir) */
+.etapes { margin: 0; padding-left: 20px; line-height: 1.7; color: var(--text-2); }
+.etapes b { color: var(--text); }
+.gros sup { font-size: .5em; }
+/* Déconnexion forcée (code réinitialisé, session expirée) : message par-dessus la page avant le retour à la connexion */
+.deconnecte { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 16px; background: rgba(8, 20, 48, .72); }
+.deconnecte .boite { width: min(100%, 380px); padding: 24px; border-radius: 16px; background: var(--surface); color: var(--text); text-align: center; box-shadow: var(--shadow-lg); }
+.deconnecte .ic { width: 56px; height: 56px; margin: 0 auto 12px; border-radius: 50%; display: grid; place-items: center; background: var(--info-soft); color: var(--info-text); font-size: 1.4rem; }
+.deconnecte h2 { margin: 0 0 8px; font-family: var(--font-title); font-size: 1.2rem; }
+.deconnecte p { margin: 0 0 12px; color: var(--text-2); line-height: 1.5; }
+.deconnecte small { color: var(--text-3); }
+/* Carte étirée à la hauteur de sa voisine : contenu centré verticalement (Mon équipe › Ma contribution) */
+.centre-v { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; }
+.centre-v .faits { width: 100%; margin-top: 0; }
+.centre-v .note { margin: 0; }
+.centre-v.gauche { align-items: stretch; text-align: left; gap: 8px; }
+.champion.centre-v.gauche { flex-direction: row; align-items: center; justify-content: flex-start; flex: 0 1 auto; margin: auto 0; }
+.centre-v.gauche > * { margin-top: 0; margin-bottom: 0; }
+/* Message d'accueil à la connexion : champion du jour de l'équipe (félicitations s'il s'agit du commercial connecté) */
+.annonce { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 16px; background: rgba(8, 20, 48, .72); overflow-y: auto; }
+.annonce .boite { position: relative; z-index: 1; width: min(100%, 460px); padding: 24px 22px 20px; border-radius: 18px; background: var(--surface); color: var(--text); text-align: center; box-shadow: var(--shadow-lg); animation: monter .4s cubic-bezier(.2,.8,.2,1) both; }
+.annonce .ic { width: 64px; height: 64px; margin: 0 auto 12px; border-radius: 50%; display: grid; place-items: center; background: var(--info-soft); color: var(--info-text); font-size: 1.6rem; }
+.annonce.gagnant .ic { background: #FEF5E1; color: #B45309; }
+.annonce h2 { margin: 0 0 8px; font-family: var(--font-title); font-size: 1.35rem; }
+.annonce p { margin: 0 0 12px; color: var(--text-2); line-height: 1.5; font-size: .9rem; }
+.annonce .grand-txt { font-size: 1rem; color: var(--text); }
+.annonce .chiffres { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 4px 0 14px; }
+.annonce .chiffres div { padding: 10px 6px; border-radius: 12px; background: var(--surface-2); }
+.annonce .chiffres b { display: block; font-family: var(--font-title); font-size: 1.35rem; color: var(--text); }
+.annonce .chiffres small { color: var(--text-3); font-size: .72rem; line-height: 1.3; display: block; }
+.annonce .bonus { padding: 8px 12px; border-radius: 10px; background: #FEF5E1; color: #7A4706; }
+.annonce .ok { width: 100%; height: 46px; border: 0; border-radius: 12px; background: var(--primary-600); color: #fff; font-weight: 700; font-size: .95rem; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 10px; }
+.annonce .ok:hover { filter: brightness(1.06); }
+.annonce .ok:focus-visible { outline: 3px solid var(--primary-ring); outline-offset: 2px; }
+.annonce .confettis { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+.annonce .confettis i { position: absolute; top: -12px; width: 8px; height: 14px; border-radius: 2px; opacity: .9; animation: tomber linear forwards; }
+@keyframes tomber { to { transform: translateY(110vh) rotate(720deg); } }
+@media (max-width: 400px) { .annonce .boite { padding: 20px 16px 16px; } .annonce .chiffres b { font-size: 1.15rem; } }

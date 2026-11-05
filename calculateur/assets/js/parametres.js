@@ -376,6 +376,102 @@
   }
 
   /* ============================== Barre de période + onglets ============================== */
+  /* ---------- Utilisateurs : codes à 4 chiffres des commerciaux RGZ (stockés en base, table agents_codes) ---------- */
+  let users = null, usersFiltre = '', usersVue = 'tous', usersErreur = null;
+  const dateHeure = (iso) => iso ? new Date(iso).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(' ', ' à ') : '—';
+  async function chargerUtilisateurs() {
+    try { users = await CT.api.utilisateurs.lister(); usersErreur = null; }
+    catch (e) { usersErreur = e.message || 'Serveur injoignable'; }
+    if (onglet === 'users') rendreUtilisateurs();
+  }
+  function messageCommerciaux() {
+    return 'Bonjour à tous. Votre espace commercial RGZ est maintenant protégé par un code secret.\n\n'
+      + '1. Ouvrez ce lien : ' + new URL('espace.php', location.href).href + '\n'
+      + '2. Tapez votre login Celtiis, comme d\'habitude.\n'
+      + '3. La première fois, le site vous demande de choisir un code de 4 chiffres : tapez-le, puis retapez le même.\n'
+      + '4. Les fois suivantes : votre login, puis ce code.\n\n'
+      + 'Ne donnez votre code à personne, même pas à un collègue.\n'
+      + 'Code oublié ? Appuyez sur le bouton WhatsApp en bas de la page de connexion : on efface votre code et vous en choisissez un nouveau.';
+  }
+  async function reinitialiserCode(u) {
+    const ok = await CT.confirmer('Réinitialiser le code de ' + u.login,
+      'Son code actuel est effacé tout de suite et, s\'il est connecté quelque part, il est déconnecté dans la minute. '
+      + 'À sa prochaine connexion, il tape son login puis choisit lui-même un nouveau code. '
+      + 'Faites-le seulement si c\'est bien ' + u.login + ' qui vous l\'a demandé (en cas de doute, appelez-le).', 'Réinitialiser le code', true);
+    if (!ok) return;
+    try {
+      await CT.api.utilisateurs.reinitialiser(u.cle);
+      CT.toast('Code de ' + u.login + ' effacé. Dites-lui : « Tape ton login, puis choisis un nouveau code à 4 chiffres. »', 'ok', 9000);
+      chargerUtilisateurs();
+    } catch (e) { CT.toast('Réinitialisation impossible : ' + e.message, 'err'); }
+  }
+  function rendreUtilisateurs() {
+    const root = $('#p-users');
+    const ico = (c) => h('i', { class: 'fa-solid ' + c, 'aria-hidden': 'true' });
+    const explication = h('section', { class: 'card', style: 'margin-bottom:24px' },
+      h('div', { class: 'card-head' }, h('div', {}, h('h3', {}, 'Comment fonctionne l\'accès des commerciaux'),
+        h('p', {}, 'Aucun compte à créer, aucun code à distribuer : chaque commercial choisit lui-même son code, et vous n\'intervenez qu\'en cas d\'oubli.'))),
+      h('div', { style: 'display:grid;gap:20px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))' },
+        h('div', {},
+          h('h4', { style: 'margin:0 0 8px' }, 'Ce que fait le commercial'),
+          h('ol', { style: 'margin:0;padding-left:20px;line-height:1.7' },
+            h('li', {}, 'Il ouvre la page de l\'espace commercial et tape son ', h('b', {}, 'login Celtiis'), '.'),
+            h('li', {}, h('b', {}, 'Première fois'), ' : il choisit un code secret de ', h('b', {}, '4 chiffres'), ' et le tape deux fois.'),
+            h('li', {}, h('b', {}, 'Les fois suivantes'), ' : login, puis son code. Au 4e chiffre, l\'espace s\'ouvre tout seul.'),
+            h('li', {}, 'Quelqu\'un qui connaît son login ne peut plus entrer sans le code. Après 5 codes faux, le login est bloqué 15 minutes.'))),
+        h('div', {},
+          h('h4', { style: 'margin:0 0 8px' }, 'Ce que vous faites si un commercial a oublié son code'),
+          h('ol', { style: 'margin:0;padding-left:20px;line-height:1.7' },
+            h('li', {}, 'Il vous écrit avec le bouton WhatsApp de sa page de connexion (le message arrive déjà rempli avec son login).'),
+            h('li', {}, 'Vérifiez que c\'est bien lui (appelez-le si vous avez un doute).'),
+            h('li', {}, 'Trouvez son login dans le tableau ci-dessous et cliquez ', h('b', {}, '« Réinitialiser »'), '.'),
+            h('li', {}, 'Dites-lui : « Tape ton login, puis choisis un nouveau code. » C\'est tout.')),
+          h('p', { class: 'hint', style: 'margin-top:10px' }, 'Vous ne voyez jamais les codes : seule une empreinte chiffrée est gardée en base. Personne, même un administrateur, ne peut les lire.'))),
+      h('div', { style: 'margin-top:20px;padding:14px 16px;border-radius:12px;background:var(--surface-2);border:1px solid var(--border)' },
+        h('div', { style: 'display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:8px' },
+          h('b', {}, 'Message à envoyer aux commerciaux (groupe WhatsApp)'),
+          h('button', { class: 'btn btn-secondary btn-sm', type: 'button', onclick: async (e) => {
+            try { await navigator.clipboard.writeText(messageCommerciaux()); CT.toast('Message copié : collez-le dans le groupe WhatsApp.', 'ok'); }
+            catch (err) { CT.toast('Copie impossible : sélectionnez le texte et copiez-le à la main.', 'warn'); }
+          } }, ico('fa-copy'), 'Copier le message')),
+        h('pre', { style: 'margin:0;white-space:pre-wrap;font:inherit;font-size:var(--fs-13, .8125rem);color:var(--text-2);line-height:1.55' }, messageCommerciaux())));
+
+    if (usersErreur) { root.replaceChildren(explication, h('section', { class: 'card' }, h('p', {}, 'Liste des commerciaux indisponible : ' + usersErreur + '. '), h('button', { class: 'btn btn-secondary btn-sm', type: 'button', onclick: chargerUtilisateurs }, ico('fa-rotate-right'), 'Réessayer'))); return; }
+    if (!users) { root.replaceChildren(explication, h('section', { class: 'card' }, h('p', { class: 'hint' }, 'Chargement des commerciaux…'))); return; }
+
+    const L = users.utilisateurs, sans = L.filter((u) => !u.code).length, bloques = L.filter((u) => u.bloque).length;
+    const resume = h('p', {}, h('b', {}, users.avec_code + ' sur ' + users.total), ' commerciaux ont déjà choisi leur code',
+      sans ? ' · ' + sans + ' ne se sont pas encore connectés depuis la mise en place' : '', bloques ? ' · ' + bloques + ' bloqué' + (bloques > 1 ? 's' : '') + ' en ce moment (trop de codes faux)' : '', '.');
+    const rech = h('input', { class: 'input', type: 'search', placeholder: 'Rechercher un login ou une équipe…', 'aria-label': 'Rechercher un commercial', value: usersFiltre, style: 'max-width:300px' });
+    rech.addEventListener('input', CT.debounce(() => { usersFiltre = rech.value; rendreTableUsers(); }, 150));
+    const vues = [['tous', 'Tous (' + L.length + ')'], ['avec', 'Code choisi (' + users.avec_code + ')'], ['sans', 'Pas encore de code (' + sans + ')'], ['bloques', 'Bloqués (' + bloques + ')']];
+    const sel = h('select', { class: 'select', 'aria-label': 'Afficher', style: 'max-width:240px', onchange: (e) => { usersVue = e.target.value; rendreTableUsers(); } },
+      vues.map(([v, t]) => h('option', { value: v, selected: v === usersVue }, t)));
+    const outils = h('div', { class: 'table-tools' }, rech, sel,
+      h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: chargerUtilisateurs, title: 'Relire la liste' }, ico('fa-rotate-right'), 'Actualiser'));
+    const carte = h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('div', {}, h('h3', {}, 'Commerciaux RGZ et leur code'),
+      resume, h('p', { class: 'hint' }, 'La liste vient des objectifs (dernier mois de chaque login). Un nouveau commercial apparaît dès que ses objectifs sont importés.'))),
+      outils, h('div', { id: 'users-table' }));
+    root.replaceChildren(explication, carte); rendreTableUsers();
+  }
+  function rendreTableUsers() {
+    const q = usersFiltre.trim().toLowerCase();
+    const L = users.utilisateurs.filter((u) => (!q || (u.login + ' ' + u.equipe).toLowerCase().includes(q))
+      && (usersVue === 'tous' || (usersVue === 'avec' && u.code) || (usersVue === 'sans' && !u.code) || (usersVue === 'bloques' && u.bloque)));
+    const etat = (u) => u.bloque ? h('span', { class: 'badge badge-neg', title: 'Trop de codes faux : bloqué 15 minutes. Réinitialiser le code lève aussi le blocage.' }, 'Bloqué')
+      : u.code ? h('span', { class: 'badge badge-pos', title: 'Choisi le ' + dateHeure(u.cree_le) }, 'Code choisi') : h('span', { class: 'badge badge-warn' }, 'Pas encore de code');
+    const tb = h('tbody', {}, L.length ? L.map((u) => h('tr', {},
+      h('td', {}, h('b', {}, u.login)), h('td', {}, u.equipe || '—'), h('td', {}, etat(u)),
+      h('td', {}, u.code ? dateHeure(u.cree_le) : '—'), h('td', {}, dateHeure(u.derniere_connexion)),
+      h('td', {}, u.reinit_le ? h('span', { title: 'Par ' + (u.reinit_par || '?') }, dateHeure(u.reinit_le)) : '—'),
+      h('td', {}, h('button', { class: 'btn btn-secondary btn-sm', type: 'button', disabled: !u.code && !u.bloque, 'aria-label': 'Réinitialiser le code de ' + u.login, title: u.code ? 'Effacer son code : il en choisira un nouveau' : 'Aucun code à effacer : il le choisira à sa première connexion', onclick: () => reinitialiserCode(u) },
+        h('i', { class: 'fa-solid fa-key', 'aria-hidden': 'true' }), 'Réinitialiser'))))
+      : [h('tr', {}, h('td', { colspan: '7', class: 'hint' }, 'Aucun commercial ne correspond.'))]);
+    const table = h('table', { class: 'data' }, h('caption', { class: 'sr-only' }, 'Commerciaux RGZ et état de leur code'),
+      entete([{ t: 'Login' }, { t: 'Équipe' }, { t: 'État' }, { t: 'Code choisi le' }, { t: 'Dernière connexion' }, { t: 'Réinitialisé le' }, { t: 'Action' }]), tb);
+    $('#users-table').replaceChildren(h('div', { class: 'table-wrap' }, table));
+  }
+
   function rendrePeriode() {
     const sel = $('#sel-periode'); sel.replaceChildren(...CT.store.cles().map((k) => h('option', { value: k, selected: k === cle }, CT.date.libelleMois(k))));
     $('#btn-reset-periode').disabled = !(CT.DEFAUTS.objectifs.periode === cle);
@@ -383,15 +479,20 @@
   }
   function rendreTout() {
     rendrePeriode();
-    ({ obj: rendreObjectifs, regles: rendreRegles, part: rendrePartenaires, save: rendreSauvegarde })[onglet]();
+    ({ obj: rendreObjectifs, regles: rendreRegles, part: rendrePartenaires, users: rendreUtilisateurs, save: rendreSauvegarde })[onglet]();
   }
-  function choisirOnglet(o) {
+  /* Onglet visible : bouton, panneau, et barre « Période » (seulement pour Objectifs et Règles, qui dépendent du mois) */
+  function montrerOnglet(o) {
     onglet = o;
     $$('#tabs [role=tab]').forEach((b) => b.setAttribute('aria-selected', String(b.id === 'tab-' + o)));
-    ['obj', 'regles', 'part', 'save'].forEach((x) => { $('#p-' + x).hidden = x !== o; });
+    ['obj', 'regles', 'part', 'users', 'save'].forEach((x) => { $('#p-' + x).hidden = x !== o; });
     $('#periode-bar').hidden = !(o === 'obj' || o === 'regles');
+  }
+  function choisirOnglet(o) {
+    montrerOnglet(o);
     rendreTout();
     if (o === 'part') actualiserHistorique();
+    if (o === 'users') chargerUtilisateurs();   // relu à chaque ouverture : connexions et codes choisis entre-temps
   }
   /* Historique mensuel : relu sur le serveur (ventes en base) à l'ouverture de l'onglet et au retour sur la page — un import
      fait entre-temps dans le tableau de bord apparaît sans recharger */
@@ -428,7 +529,7 @@
     });
     $$('#tabs [role=tab]').forEach((b) => b.addEventListener('click', () => choisirOnglet(b.id.replace('tab-', ''))));
     // Sous-menus du sidebar : parametres.php#obj | #regles | #part | #save ouvrent la section ; la surbrillance suit l'onglet
-    const ONGLETS_P = ['obj', 'regles', 'part', 'save'];
+    const ONGLETS_P = ['obj', 'regles', 'part', 'users', 'save'];
     const marquer = (o) => $$('#nav a[data-sous^="parametres/"]').forEach((x) => { if (x.dataset.sous === 'parametres/' + o) x.setAttribute('aria-current', 'page'); else x.removeAttribute('aria-current'); });
     // Adresse : #regles (page seule) ou #parametres/regles (page de l'application) ; les adresses des autres pages sont ignorées
     const depuisHash = () => { const m = /^#(?:parametres\/)?(\w+)$/.exec(location.hash), o = m ? m[1] : null; if (EMBARQUE && !/^#parametres/.test(location.hash)) return; if (ONGLETS_P.includes(o) && o !== onglet) choisirOnglet(o); marquer(ONGLETS_P.includes(o) ? o : onglet); };
@@ -521,6 +622,10 @@
     // Restaurer l'onglet sauvegardé au démarrage
     choisirOnglet(onglet);
   }
+  // Onglet demandé par l'adresse (#parametres/users, #regles…) appliqué tout de suite, sans attendre les paramètres du serveur :
+  // à l'actualisation, plus d'affichage intermédiaire d'un autre onglet (barre « Période » vide…)
+  const m0 = /^#(?:parametres\/)?(obj|regles|part|users|save)$/.exec(location.hash);
+  montrerOnglet(m0 ? m0[1] : 'obj');
   const demarrer = () => CT.store.pret.then(init);   // paramètres chargés depuis la base avant l'affichage
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', demarrer); else demarrer();
 })();

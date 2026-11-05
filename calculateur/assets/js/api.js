@@ -90,6 +90,11 @@
       enregistrerObjectif: (mois, objectif) => requete('/factures/objectifs/' + mois, { method: 'PUT', json: { objectif_b2c: objectif } }),
       lignes: (mois) => requete('/factures', { params: { mois } }),
     },
+    /* Paramètres › Utilisateurs : codes à 4 chiffres des commerciaux RGZ */
+    utilisateurs: {
+      lister: () => requete('/utilisateurs'),
+      reinitialiser: (cle) => requete('/utilisateurs/reinitialiser', { method: 'POST', json: { cle } }),
+    },
     /* Vue d'ensemble de toute la base (tableau de bord du Directeur) */
     synthese: (periode) => requete('/synthese', { params: periode }),   // periode {du, au} ; sans : année en cours
     /* Données Celtiis (souscriptions) : remplace IndexedDB « ct_session » */

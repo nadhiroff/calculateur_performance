@@ -14,7 +14,7 @@
   Object.entries({ challogin: ['view-challogin', 'Challenge login', '#challenge-login'], chalequipe: ['view-chalequipe', 'Challenge équipe', '#challenge-equipe'], factb2c: ['view-factb2c', 'Facturation B2C', '#facturation-b2c'],
     factb2b: ['view-factb2b', 'Facturation B2B', '#facturation-b2b'], finance: ['view-finance', 'Point financier par login', '#point-financier'], reports: ['view-reports', 'Reports', '#reports'],
     // Facturation : tableau de bord, évolution, performance agents, recommandations (facturation.js) ; Analyse (analyse.js)
-    factdash: ['view-factdash', 'Tableau de bord des factures', '#facturation'], factevo: ['view-factevo', 'Évolution de la facturation', '#facturation-evolution'],
+    factdash: ['view-factdash', 'Résumé de la facturation', '#facturation'], factevo: ['view-factevo', 'Évolution de la facturation', '#facturation-evolution'],
     factperf: ['view-factperf', 'Performance agents', '#facturation-performance'], factreco: ['view-factreco', 'Recommandations', '#facturation-recommandations'],
     comparaisons: ['view-comparaisons', 'Comparaisons', '#comparaisons'], previsions: ['view-previsions', 'Prévisions', '#previsions'],
     parametres: ['view-parametres', 'Paramètres', '#parametres'] })   // Paramètres : page de l'application (parametres.js), sans rechargement

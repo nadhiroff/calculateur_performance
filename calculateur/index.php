@@ -21,7 +21,7 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous">
   <link rel="stylesheet" href="assets/css/design-system.css?v=20261021-15">
   <link rel="stylesheet" href="assets/css/components.css?v=20261104-x2">
-  <link rel="stylesheet" href="assets/css/dashboard.css?v=20261104-y1">
+  <link rel="stylesheet" href="assets/css/dashboard.css?v=20261105-p1">
   <link rel="stylesheet" href="assets/css/print.css?v=20261021-15">
   <style>/* Page Paramètres (reprise de parametres.php, limitée à #view-parametres) */
 
@@ -98,7 +98,7 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
       <!-- Menu « Facturation » et ses sous-menus -->
       <details class="nav-group" data-groupe="facturation" open>
         <summary><i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i>Facturation</summary>
-        <a href="#facturation" data-vue="factdash"><i class="fa-solid fa-gauge-high" aria-hidden="true"></i>Tableau de bord</a>
+        <a href="#facturation" data-vue="factdash"><i class="fa-solid fa-gauge-high" aria-hidden="true"></i>Résumé</a>
         <a href="#facturation-b2b" data-vue="factb2b"><i class="fa-solid fa-building" aria-hidden="true"></i>Facture B2B</a>
         <a href="#facturation-b2c" data-vue="factb2c"><i class="fa-solid fa-house-signal" aria-hidden="true"></i>Facture B2C</a>
         <a href="#facturation-evolution" data-vue="factevo"><i class="fa-solid fa-chart-line" aria-hidden="true"></i>Évolution</a>
@@ -113,6 +113,7 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
         <a href="#parametres/obj" data-sous="parametres/obj"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>Saisie des objectifs</a>
         <a href="#parametres/regles" data-sous="parametres/regles"><i class="fa-solid fa-scale-balanced" aria-hidden="true"></i>Règles de motivation</a>
         <a href="#parametres/part" data-sous="parametres/part"><i class="fa-solid fa-handshake" aria-hidden="true"></i>Partenaires</a>
+        <a href="#parametres/users" data-sous="parametres/users"><i class="fa-solid fa-user-lock" aria-hidden="true"></i>Utilisateurs</a>
         <a href="#parametres/save" data-sous="parametres/save"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>Sauvegarde</a>
       </details>
       <div class="nav-user" data-inactivite="<?= App\Auth::inactiviteAdmin() ?>">
@@ -243,7 +244,7 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
         </section>
         <!-- ===== FACTURATION : TABLEAU DE BORD, ÉVOLUTION, PERFORMANCE AGENTS, RECOMMANDATIONS (facturation.js) ===== -->
         <section id="view-factdash" class="view" aria-labelledby="h-factdash">
-          <div class="page-title"><div><span class="eyebrow">Facturation Celtiis</span><h1 id="h-factdash">Tableau de bord des factures</h1></div></div>
+          <div class="page-title"><div><span class="eyebrow">Facturation Celtiis</span><h1 id="h-factdash">Résumé</h1></div></div>
           <div id="factdash-content"></div>
         </section>
         <section id="view-factevo" class="view" aria-labelledby="h-factevo">
@@ -260,23 +261,25 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
         </section>
         <!-- ===== PARAMÈTRES (parametres.js) : page de l'application, sans rechargement ===== -->
         <section id="view-parametres" class="view" aria-labelledby="h-parametres">
-          <div class="page-title"><div><span class="eyebrow">Configuration</span><h1 id="h-parametres">Paramètres</h1><p>Objectifs, règles de motivation et partenaires — modifiables sans toucher au code. <span class="status" id="statut" aria-live="polite"></span></p></div></div>
+          <div class="page-title"><div><span class="eyebrow">Configuration</span><h1 id="h-parametres">Paramètres</h1><p>Objectifs, règles de motivation, partenaires et codes d'accès des commerciaux, modifiables sans toucher au code. <span class="status" id="statut" aria-live="polite"></span></p></div></div>
           <div class="tabs" role="tablist" aria-label="Sections des paramètres" id="tabs">
             <button role="tab" id="tab-obj" aria-controls="p-obj" aria-selected="true">Objectifs</button>
             <button role="tab" id="tab-regles" aria-controls="p-regles" aria-selected="false">Règles de motivation</button>
             <button role="tab" id="tab-part" aria-controls="p-part" aria-selected="false">Partenaires</button>
+            <button role="tab" id="tab-users" aria-controls="p-users" aria-selected="false">Utilisateurs</button>
             <button role="tab" id="tab-save" aria-controls="p-save" aria-selected="false">Sauvegarde</button>
           </div>
-          <div class="param-bar card" id="periode-bar">
+          <div class="param-bar card" id="periode-bar" hidden>
             <div class="field"><label for="sel-periode">Période</label><select class="select" id="sel-periode"></select></div>
             <button class="btn btn-primary" id="btn-nouveau-mois" type="button"><i class="fa-solid fa-plus" aria-hidden="true"></i>Nouveau mois</button>
             <button class="btn btn-secondary" id="btn-dup-annee" type="button"><i class="fa-solid fa-calendar-plus" aria-hidden="true"></i>Dupliquer l'année</button>
             <button class="btn btn-ghost" id="btn-reset-periode" type="button"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i>Réinitialiser ce mois</button>
             <button class="btn btn-danger" id="btn-suppr-mois" type="button" style="margin-left:auto"><i class="fa-solid fa-trash" aria-hidden="true"></i>Supprimer ce mois</button>
           </div>
-          <section id="p-obj" role="tabpanel" aria-labelledby="tab-obj"></section>
+          <section id="p-obj" role="tabpanel" aria-labelledby="tab-obj" hidden></section>
           <section id="p-regles" role="tabpanel" aria-labelledby="tab-regles" hidden></section>
           <section id="p-part" role="tabpanel" aria-labelledby="tab-part" hidden></section>
+          <section id="p-users" role="tabpanel" aria-labelledby="tab-users" hidden></section>
           <section id="p-save" role="tabpanel" aria-labelledby="tab-save" hidden></section>
       
         </section>
@@ -306,7 +309,7 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer crossorigin="anonymous"></script>
   <script src="assets/js/utils.js?v=20261104-r1" defer></script>
   <script src="assets/js/table.js?v=20261021-15" defer></script>
-  <script src="assets/js/api.js?v=20261104-y1" defer></script>
+  <script src="assets/js/api.js?v=20261105-u1" defer></script>
   <script src="assets/js/store.js?v=20261027-offres" defer></script>
   <script src="assets/js/regles.js?v=20261027-offres" defer></script>
   <script src="assets/js/objectifs.js?v=20261104-s1" defer></script>
@@ -320,10 +323,10 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
   <script src="assets/js/export.js?v=20261104-k1" defer></script>
   <script src="assets/js/partage.js?v=20261104-k1" defer></script>
   <script src="assets/js/facturation_calc.js?v=20261104-y1" defer></script>
-  <script src="assets/js/facturation.js?v=20261104-y1" defer></script>
+  <script src="assets/js/facturation.js?v=20261105-r1" defer></script>
   <script src="assets/js/analyse_calc.js?v=20261104-e1" defer></script>
   <script src="assets/js/analyse.js?v=20261104-k1" defer></script>
-  <script src="assets/js/parametres.js?v=20261104-r1" defer></script>
-  <script src="assets/js/app.js?v=20261104-s1" defer></script>
+  <script src="assets/js/parametres.js?v=20261105-p1" defer></script>
+  <script src="assets/js/app.js?v=20261105-r1" defer></script>
 </body>
 </html>
