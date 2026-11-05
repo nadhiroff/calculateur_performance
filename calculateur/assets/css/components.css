@@ -162,6 +162,11 @@
 @media (max-width: 1023px) {
   .sidebar { width: min(84vw, 300px); transform: translateX(-100%); transition: transform var(--t-base), visibility 0s var(--t-base); visibility: hidden; box-shadow: var(--shadow-lg); }
   .sidebar.is-open { transform: none; visibility: visible; transition: transform var(--t-base); }
+  /* Téléphone : hauteur = partie VISIBLE de l'écran (100dvh suit la barre d'adresse et la barre de navigation du téléphone),
+     au lieu de toute la hauteur de la page dont le bas passe sous ces barres ; marge du bas pour la zone système
+     (barre d'accueil iPhone, gestes Android). Le bas du menu (compte, déconnexion, pied) reste atteignable en faisant défiler. */
+  .sidebar { bottom: auto; height: 100vh; height: 100dvh; padding-bottom: calc(var(--sp-4) + env(safe-area-inset-bottom, 0px)); overscroll-behavior: contain; }
+  .sidebar > * { flex-shrink: 0; }
   #mobile-menu-btn { display: inline-flex; align-items: center; justify-content: center; }
   .topbar-brand { display: inline-flex; }
   .topbar-brand img { width: 30px; height: 30px; flex: none; object-fit: contain; border-radius: 8px; background: #fff; padding: 2px; }

@@ -253,6 +253,9 @@ table.ventes .o-mob { display: none; color: var(--text-3); font-size: .7rem; }
   .coque { grid-template-columns: 1fr; }
   .menu { position: fixed; left: 0; top: 0; bottom: 0; width: min(84vw, 300px); transform: translateX(-102%); transition: transform .28s cubic-bezier(.2,.8,.2,1); box-shadow: var(--shadow-lg); padding-top: calc(18px + env(safe-area-inset-top, 0px)); }
   body.menu-ouvert .menu { transform: none; }
+  /* Hauteur = partie visible de l'écran (barres du téléphone déduites) + marge de la zone système : le bas du menu reste visible */
+  .menu { bottom: auto; height: 100vh; height: 100dvh; padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px)); overscroll-behavior: contain; }
+  .menu > * { flex-shrink: 0; }
   .voile { position: fixed; inset: 0; z-index: 35; background: rgba(8,20,48,.5); backdrop-filter: blur(2px); }
   body.menu-ouvert .voile { display: block; }
   body.menu-ouvert { overflow: hidden; }
