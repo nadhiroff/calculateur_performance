@@ -326,7 +326,7 @@ $h = static fn (?string $s): string => htmlspecialchars((string) $s, ENT_QUOTES,
   <script src="assets/js/facturation.js?v=20261105-r1" defer></script>
   <script src="assets/js/analyse_calc.js?v=20261104-e1" defer></script>
   <script src="assets/js/analyse.js?v=20261104-k1" defer></script>
-  <script src="assets/js/parametres.js?v=20261105-p1" defer></script>
+  <script src="assets/js/parametres.js?v=20261105-l1" defer></script>
   <script src="assets/js/app.js?v=20261105-r1" defer></script>
 </body>
 </html>

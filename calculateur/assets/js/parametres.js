@@ -384,9 +384,12 @@
     catch (e) { usersErreur = e.message || 'Serveur injoignable'; }
     if (onglet === 'users') rendreUtilisateurs();
   }
+  // Adresse de la page de connexion des commerciaux, déduite de l'adresse de cette page : elle suit automatiquement
+  // l'hébergement (https://rgz.bj/…/calculateur/espace.php une fois en ligne), rien à changer à la main.
+  const lienEspace = () => new URL('espace.php', location.href).href;
   function messageCommerciaux() {
     return 'Bonjour à tous. Votre espace commercial RGZ est maintenant protégé par un code secret.\n\n'
-      + '1. Ouvrez ce lien : ' + new URL('espace.php', location.href).href + '\n'
+      + '1. Ouvrez ce lien :\n' + lienEspace() + '\n'   // seul sur sa ligne : WhatsApp le rend cliquable
       + '2. Tapez votre login Celtiis, comme d\'habitude.\n'
       + '3. La première fois, le site vous demande de choisir un code de 4 chiffres : tapez-le, puis retapez le même.\n'
       + '4. Les fois suivantes : votre login, puis ce code.\n\n'
@@ -434,7 +437,9 @@
             try { await navigator.clipboard.writeText(messageCommerciaux()); CT.toast('Message copié : collez-le dans le groupe WhatsApp.', 'ok'); }
             catch (err) { CT.toast('Copie impossible : sélectionnez le texte et copiez-le à la main.', 'warn'); }
           } }, ico('fa-copy'), 'Copier le message')),
-        h('pre', { style: 'margin:0;white-space:pre-wrap;font:inherit;font-size:var(--fs-13, .8125rem);color:var(--text-2);line-height:1.55' }, messageCommerciaux())));
+        // Le lien du message est cliquable ici aussi (le texte copié reste identique)
+        h('pre', { style: 'margin:0;white-space:pre-wrap;font:inherit;font-size:var(--fs-13, .8125rem);color:var(--text-2);line-height:1.55' },
+          ...messageCommerciaux().split(lienEspace()).flatMap((morceau, i) => (i ? [h('a', { href: lienEspace(), target: '_blank', rel: 'noopener', style: 'color:var(--primary-600);font-weight:600;word-break:break-all' }, lienEspace()), morceau] : [morceau])))));
 
     if (usersErreur) { root.replaceChildren(explication, h('section', { class: 'card' }, h('p', {}, 'Liste des commerciaux indisponible : ' + usersErreur + '. '), h('button', { class: 'btn btn-secondary btn-sm', type: 'button', onclick: chargerUtilisateurs }, ico('fa-rotate-right'), 'Réessayer'))); return; }
     if (!users) { root.replaceChildren(explication, h('section', { class: 'card' }, h('p', { class: 'hint' }, 'Chargement des commerciaux…'))); return; }
